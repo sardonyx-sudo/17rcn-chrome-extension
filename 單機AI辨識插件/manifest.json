@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "扶輪公益網 AI 刊登助手 (單機版)",
+  "version": "1.0.0",
+  "description": "上傳照片後自動呼叫 Gemini AI 辨識物資，自動填寫刊登表單。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    },
+    "default_title": "扶輪公益網 AI 刊登助手 (單機版)"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://17rcn.org/member/goods_add.php*",
+        "*://www.17rcn.org/member/goods_add.php*",
+        "*://17rcn.org/goods/goods_add.php*",
+        "*://www.17rcn.org/goods/goods_add.php*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://17rcn.org/*",
+    "*://www.17rcn.org/*",
+    "https://generativelanguage.googleapis.com/*"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "扶輪公益網 AI 刊登助手 (Google試算表整合版)",
+  "version": "2.0.0",
+  "description": "連動 Google 表單與試算表物資佇列，一鍵自動填寫表單並自動注入 Google Drive 遠端照片，免 Key 極速刊登。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    },
+    "default_title": "扶輪公益網 AI 刊登助手 (Google試算表整合版)"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://17rcn.org/member/goods_add.php*",
+        "*://www.17rcn.org/member/goods_add.php*",
+        "*://17rcn.org/goods/goods_add.php*",
+        "*://www.17rcn.org/goods/goods_add.php*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://17rcn.org/*",
+    "*://www.17rcn.org/*",
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*",
+    "https://drive.google.com/*",
+    "https://*.googleusercontent.com/*"
+  ]
+}

@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>扶輪公益網 - Google 試算表整合版</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 360px;
+      min-height: 480px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+      background: #f4f6f9;
+      color: #2d3748;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #0f9d58 0%, #0b8043 100%);
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(15, 157, 88, 0.25);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-icon {
+      font-size: 20px;
+    }
+    .header-text h1 {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .header-text p {
+      font-size: 10px;
+      opacity: 0.85;
+    }
+    .connection-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 3px 8px;
+      border-radius: 12px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #a0aec0;
+    }
+    .status-dot.online { background: #48bb78; box-shadow: 0 0 6px #48bb78; }
+    .status-dot.offline { background: #f56565; }
+
+    /* Container */
+    .main {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Collapsible GAS URL Setting */
+    .gas-config-card {
+      background: white;
+      border-radius: 10px;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      font-size: 12px;
+    }
+    .gas-config-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      font-weight: 600;
+      color: #4a5568;
+    }
+    .gas-config-body {
+      margin-top: 8px;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .gas-config-body.show {
+      display: flex;
+    }
+    .input-row {
+      display: flex;
+      gap: 6px;
+    }
+    input[type="text"], select {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 11px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus, select:focus {
+      border-color: #0f9d58;
+    }
+    .btn-secondary {
+      background: #edf2f7;
+      border: 1px solid #cbd5e0;
+      color: #4a5568;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+
+    /* Switch CSS */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #cbd5e0;
+      transition: .3s;
+      border-radius: 20px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #0f9d58;
+    }
+    input:checked + .slider:before {
+      transform: translateX(16px);
+    }
+
+    /* Queue Navigator & Card */
+    .queue-card {
+      background: white;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .queue-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #edf2f7;
+      padding-bottom: 8px;
+    }
+    .queue-count {
+      font-size: 12px;
+      font-weight: 700;
+      color: #2d3748;
+    }
+    .btn-sync {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      color: #718096;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .btn-sync:hover {
+      color: #0f9d58;
+      background: #e6f4ea;
+    }
+
+    /* Photo Carousel / Thumbnail */
+    .photo-box {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .photo-thumb {
+      width: 76px;
+      height: 76px;
+      border-radius: 6px;
+      object-fit: cover;
+      border: 1px solid #e2e8f0;
+      background: #edf2f7;
+    }
+    .no-photo {
+      width: 100%;
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f7fafc;
+      color: #a0aec0;
+      font-size: 11px;
+      border-radius: 6px;
+      border: 1px dashed #cbd5e0;
+    }
+
+    /* Item Details */
+    .item-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a202c;
+      line-height: 1.3;
+    }
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .badge-cat { background: #ebf8ff; color: #2b6cb0; }
+    .badge-cond-new { background: #e6fffa; color: #234e52; }
+    .badge-cond-used { background: #fffaf0; color: #7b341e; }
+    .badge-qty { background: #f7fafc; color: #4a5568; border: 1px solid #e2e8f0; }
+
+    .item-desc {
+      font-size: 11px;
+      color: #4a5568;
+      background: #f8fafc;
+      padding: 8px;
+      border-radius: 6px;
+      line-height: 1.4;
+      max-height: 60px;
+      overflow-y: auto;
+    }
+
+    .item-meta {
+      font-size: 10px;
+      color: #718096;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    /* Queue Controls (Previous, Next, Skip) */
+    .nav-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+    .nav-btn {
+      flex: 1;
+      padding: 6px 8px;
+      background: white;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #4a5568;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: #edf2f7;
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .btn-skip {
+      color: #e53e3e;
+      border-color: #feb2b2;
+    }
+    .btn-skip:hover:not(:disabled) {
+      background: #fff5f5;
+    }
+
+    /* Fill Button */
+    .btn-fill {
+      background: linear-gradient(135deg, #0f9d58 0%, #0b8043 100%);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 3px 10px rgba(15, 157, 88, 0.3);
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .btn-fill:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(15, 157, 88, 0.4);
+    }
+    .btn-fill:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Status Div */
+    .status-msg {
+      font-size: 11px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      display: none;
+      line-height: 1.4;
+    }
+    .status-msg.info { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; display: block; }
+    .status-msg.success { background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; display: block; }
+    .status-msg.error { background: #fff5f5; color: #9b2c2c; border: 1px solid #fed7d7; display: block; }
+
+    /* Empty state */
+    .empty-state {
+      padding: 30px 10px;
+      text-align: center;
+      color: #a0aec0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .empty-state.show {
+      display: flex;
+    }
+    .empty-icon {
+      font-size: 36px;
+    }
+
+    /* Not on page warning */
+    .warning-bar {
+      background: #feebc8;
+      border: 1px solid #fbd38d;
+      color: #744210;
+      font-size: 11px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    /* Tab Bar */
+    .tab-bar {
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 6px 8px;
+      background: white;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #4a5568;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover {
+      background: #f7fafc;
+    }
+    .tab-btn.active {
+      background: #0f9d58;
+      color: white;
+      border-color: #0b8043;
+      box-shadow: 0 1px 4px rgba(15,157,88,0.25);
+    }
+
+    /* Skipped View */
+    .skipped-view {
+      background: white;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      padding: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .skipped-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 280px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .skipped-item-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .skipped-item-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .skipped-item-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #2d3748;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .skipped-item-meta {
+      font-size: 10px;
+      color: #718096;
+      margin-top: 2px;
+    }
+    .btn-restore {
+      background: #ebf8ff;
+      border: 1px solid #bee3f8;
+      color: #2b6cb0;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 10.5px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .btn-restore:hover {
+      background: #bee3f8;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <span class="header-icon">📊</span>
+      <div class="header-text">
+        <h1>扶輪公益網 AI 助手</h1>
+        <p>Google 試算表佇列版</p>
+      </div>
+    </div>
+    <div class="connection-badge">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusLabel">檢查中</span>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- 非表單頁面警示 -->
+    <div class="warning-bar" id="notOnPageWarning">
+      ⚠️ 請先開啟扶輪公益網「刊登資源」頁面。
+    </div>
+
+    <!-- 設定卡片 (可折疊) -->
+    <div class="gas-config-card">
+      <div class="gas-config-header" id="toggleGasConfig">
+        <span>⚙️ 設定與清理</span>
+        <span id="configArrow">▼</span>
+      </div>
+      <div class="gas-config-body" id="gasConfigBody">
+        <label style="font-size: 11px; font-weight: 600; color: #4a5568;">GAS 應用程式網址：</label>
+        <div class="input-row">
+          <input type="text" id="gasUrlInput" placeholder="請貼上 Apps Script Web App 網址...">
+          <button class="btn-secondary" id="btnSaveGas">儲存</button>
+        </div>
+        <p style="font-size: 10px; color: #718096; margin-top: 2px;">網址為部署為 Web App 取得之 exec 網址</p>
+
+        <!-- 手動重辨模型選擇 -->
+        <div style="margin-top: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+            <label style="font-size: 11px; font-weight: 600; color: #4a5568;">🤖 手動重辨模型 (選填)：</label>
+            <button type="button" id="btnDetectModels" class="btn-secondary" style="font-size: 9.5px; padding: 2px 6px; height: auto;">🔄 偵測可用模型</button>
+          </div>
+          <select id="modelSelect" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 11px; outline: none; background: white;">
+            <option value="auto">✨ 自動選擇最新 Flash (推薦)</option>
+          </select>
+          <p style="font-size: 9.5px; color: #718096; margin-top: 2px;">僅在點選重辨時傳給雲端；平時純自動巡檢固定使用線上最新 Flash</p>
+        </div>
+
+        <div style="margin-top: 6px;">
+          <label style="font-size: 11px; font-weight: 600; color: #4a5568;">📍 預設所在地址 (志工未填時採用)：</label>
+          <input type="text" id="defaultAddressInput" placeholder="例如：台北市中正區忠孝東路一段1號" style="width: 100%; margin-top: 3px;">
+        </div>
+
+        <!-- 防送出衝突保護 Switch -->
+        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 11px; font-weight: 600; color: #4a5568;">🛡️ 防送出衝突保護：</div>
+            <div style="font-size: 9.5px; color: #718096;">表單送出後自動鎖定，防止重複連點</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="antiDoubleSubmit" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- 空間維護 -->
+        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e2e8f0; display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 11px; font-weight: 600; color: #4a5568;">🧹 清理已刊登物資：</div>
+              <div style="font-size: 9.5px; color: #718096;">刪除已刊登的試算表列與雲端照片</div>
+            </div>
+            <button class="btn-secondary" id="btnClearPublished" style="color: #2b6cb0; border-color: #bee3f8; background: #ebf8ff; font-weight: 700; cursor: pointer;">清理已刊登</button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 11px; font-weight: 600; color: #4a5568;">🗑️ 清理已略過物資：</div>
+              <div style="font-size: 9.5px; color: #718096;">刪除標記為略過的試算表列與雲端照片</div>
+            </div>
+            <button class="btn-secondary" id="btnClearSkipped" style="color: #c53030; border-color: #feb2b2; background: #fff5f5; font-weight: 700; cursor: pointer;">清理已略過</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 頁籤切換：待刊佇列 vs 已略過物資 -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabPending">📋 待刊佇列 (<span id="tabPendingCount">0</span>)</button>
+      <button class="tab-btn" id="tabSkipped">📁 已略過 (<span id="tabSkippedCount">0</span>)</button>
+    </div>
+
+    <!-- 辨識失敗通知與重試工具條 (若有失敗列自動浮現) -->
+    <div id="failedNoticeBar" style="display: none; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; padding: 8px 10px; font-size: 11px; color: #c53030;">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+        <span>⚠️ 雲端有 <strong id="failedCountText">0</strong> 筆物資辨識失敗</span>
+        <button id="btnReprocessAll" class="btn-secondary" style="color: #c53030; border-color: #feb2b2; background: #ffffff; font-size: 10.5px; padding: 3px 8px; font-weight: 700; cursor: pointer;">🔄 雲端重新辨識</button>
+      </div>
+      <div style="font-size: 9.5px; color: #742a2a; margin-top: 3px;">通常因尖峰流量暫時受阻，點擊即可由雲端自動補跑，無需開啟 Apps Script</div>
+    </div>
+
+    <!-- 物資卡片 (Queue Card) -->
+    <div class="queue-card" id="queueCard" style="display: none;">
+      <div class="queue-header">
+        <span class="queue-count" id="queuePosition">待刊物資 (0 筆)</span>
+        <div style="display: flex; gap: 4px;">
+          <button class="btn-sync" id="btnReprocessCurrent" title="重新辨識此筆物資（如需更新 AI 說明或照片）" style="font-size: 11px; color: #4a5568; background: #edf2f7; padding: 2px 6px; border-radius: 4px; border: none; cursor: pointer;">🔄 重辨此筆</button>
+          <button class="btn-sync" id="btnRefreshQueue" title="同步最新物資">🔄 同步</button>
+        </div>
+      </div>
+
+      <!-- 鎖定狀態條 (刊登中時顯示) -->
+      <div id="lockedNoticeBar" style="display: none; align-items: center; justify-content: space-between; background: #fffaf0; border: 1px solid #fbd38d; border-radius: 6px; padding: 4px 8px;">
+        <span style="font-size: 10.5px; color: #744210; font-weight: 600;">⚠️ 此物資正在刊登中 (已鎖定)</span>
+        <button id="btnUnlockCurrent" class="btn-secondary" style="color: #b7791f; border-color: #fbd38d; background: #ffffff; font-size: 10px; padding: 2px 6px; cursor: pointer;">🔓 解除鎖定</button>
+      </div>
+
+      <!-- 相片提示條 (超過 3 張時顯示) -->
+      <div id="photoNotice" style="display: none; font-size: 10px; color: #2b6cb0; background: #ebf8ff; padding: 4px 8px; border-radius: 4px;">
+        📸 志工共上傳 <span id="photoTotalCount">0</span> 張照片（網站上限 3 張，已選取前 3 張刊登）
+      </div>
+
+      <!-- 相片展示 -->
+      <div class="photo-box" id="photoBox">
+        <!-- 縮圖動態插入 -->
+      </div>
+
+      <!-- 物資品名 -->
+      <div class="item-title" id="itemTitle">載入中...</div>
+
+      <!-- 分類與屬性標籤 -->
+      <div class="tag-row" id="tagRow">
+        <span class="badge badge-cat" id="badgeCat">分類</span>
+        <span class="badge badge-cond-new" id="badgeCond">全新</span>
+        <span class="badge badge-qty" id="badgeQty">數量: 1</span>
+        <span class="badge badge-qty" id="badgePrice">NT$ 0</span>
+      </div>
+
+      <!-- 詳細說明預覽 -->
+      <div class="item-desc" id="itemDesc">無說明</div>
+
+      <!-- 志工與地址中繼資料 -->
+      <div class="item-meta">
+        <span id="metaUploader">志工: -</span>
+        <span id="metaAddress">地址: -</span>
+      </div>
+
+      <!-- 佇列操作按鈕 -->
+      <div class="nav-row">
+        <button class="nav-btn" id="btnPrev">◀ 上一筆</button>
+        <button class="nav-btn btn-skip" id="btnSkip">略過</button>
+        <button class="nav-btn" id="btnDeleteItem" title="刪除此筆物資並移除其雲端硬碟照片" style="color: #c53030; border-color: #feb2b2;">🗑️ 刪除</button>
+        <button class="nav-btn" id="btnNext">下一筆 ▶</button>
+      </div>
+    </div>
+
+    <!-- 空佇列狀態 (Empty State) -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🎉</div>
+      <div style="font-size: 13px; font-weight: 600; color: #4a5568;">目前無待刊登物資！</div>
+      <p style="font-size: 11px;">所有表單物資皆已刊登完成，或點擊下方按鈕重新同步試算表。</p>
+      <button class="btn-secondary" id="btnEmptySync">🔄 重新整理試算表</button>
+    </div>
+
+    <!-- 已略過物資區域 (Skipped View) -->
+    <div class="skipped-view" id="skippedView" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 6px;">
+        <span style="font-size: 12px; font-weight: 700; color: #2d3748;">📁 已略過清單 (<span id="skippedViewCount">0</span> 筆)</span>
+        <button class="btn-sync" id="btnRefreshSkipped" title="同步略過清單" style="font-size: 11px; padding: 2px 6px;">🔄 同步</button>
+      </div>
+      <div class="skipped-list" id="skippedList">
+        <!-- 動態插入略過卡片 -->
+      </div>
+      <div id="emptySkipped" style="display: none; text-align: center; color: #a0aec0; padding: 30px 10px; font-size: 11px;">
+        目前沒有被略過的物資。
+      </div>
+    </div>
+
+    <!-- 一鍵填表與注入按鈕 -->
+    <button class="btn-fill" id="btnFill" disabled>
+      <span id="fillBtnIcon">🚀</span>
+      <span id="fillBtnText">一鍵帶入此筆物資 (含照片)</span>
+    </button>
+
+    <!-- 訊息提示條 -->
+    <div class="status-msg" id="statusMsg"></div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
