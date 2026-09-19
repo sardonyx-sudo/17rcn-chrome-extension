@@ -182,12 +182,12 @@ async function handleFillSheetItem(item, downloadedImages, defaultAddress) {
     filledFields.push('媒合期限: 90天');
   }
 
-  // 10. 建議索取方式：預設自送 (SR_howTake[] = '2')
-  const howTake2 = document.querySelector('input[name="SR_howTake[]"][value="2"]');
-  if (howTake2) {
-    howTake2.checked = true;
-    triggerEvent(howTake2, 'change');
-    filledFields.push('建議索取方式: 自送');
+  // 10. 建議索取方式：預設自取 (SR_howTake[] = '1')
+  const howTake1 = document.querySelector('input[name="SR_howTake[]"][value="1"]');
+  if (howTake1) {
+    howTake1.checked = true;
+    triggerEvent(howTake1, 'change');
+    filledFields.push('建議索取方式: 自取');
   }
 
   // 11. 誰能索取：預設任何單位皆可 (SR_onlyCharity = '0')

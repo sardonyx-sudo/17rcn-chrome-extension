@@ -198,11 +198,11 @@ async function fillForm(data, address) {
     filled.push('媒合期限（90天）');
   }
 
-  // 10. 預設值：建議索取方式 = 自送
-  const howTake2 = document.querySelector('input[name="SR_howTake[]"][value="2"]');
-  if (howTake2) {
-    howTake2.checked = true;
-    filled.push('建議索取方式（自送）');
+  // 10. 預設值：建議索取方式 = 自取
+  const howTake1 = document.querySelector('input[name="SR_howTake[]"][value="1"]');
+  if (howTake1) {
+    howTake1.checked = true;
+    filled.push('建議索取方式（自取）');
   }
 
   // 11. 預設值：誰能索取 = 任何單位
