@@ -30,6 +30,9 @@ const btnDetectModels = document.getElementById('btnDetectModels');
 const antiDoubleSubmitInput = document.getElementById('antiDoubleSubmit');
 const btnSaveGas = document.getElementById('btnSaveGas');
 
+const processingNoticeBar = document.getElementById('processingNoticeBar');
+const processingCountText = document.getElementById('processingCountText');
+const badgeProcessingPill = document.getElementById('badgeProcessingPill');
 const failedNoticeBar = document.getElementById('failedNoticeBar');
 const failedCountText = document.getElementById('failedCountText');
 const btnReprocessAll = document.getElementById('btnReprocessAll');
@@ -89,6 +92,10 @@ let currentIndex = 0;
 let isOnTargetPage = false;
 let currentActiveTab = 'pending';
 let lastLockedRow = null;
+let isRefreshingQueue = false;
+let lastManualRefreshTime = 0;
+let processingAutoRefreshCount = 0;
+let processingTimer = null;
 
 // ───────────────────────────────────────────────
 // 初始化流程 (支援本機暫存秒開 SWR)
@@ -350,8 +357,8 @@ function setConnectionStatus(state, label) {
 // ───────────────────────────────────────────────
 // 物資佇列同步與渲染
 // ───────────────────────────────────────────────
-btnRefreshQueue.addEventListener('click', () => refreshQueue({ force: true }));
-btnEmptySync.addEventListener('click', () => refreshQueue({ force: true }));
+btnRefreshQueue.addEventListener('click', () => refreshQueue({ force: false }));
+btnEmptySync.addEventListener('click', () => refreshQueue({ force: false }));
 
 // 一鍵由雲端重新辨識所有失敗項目
 btnReprocessAll.addEventListener('click', async () => {
@@ -675,6 +682,25 @@ function renderSkippedList() {
 
 async function refreshQueue(options = {}) {
   const isSilent = options.silent === true;
+  const isForce = options.force === true;
+
+  // 1. In-Flight 飛航鎖：已有進行中的請求時忽略，避免並發打爆 GAS
+  if (isRefreshingQueue) {
+    console.log('refreshQueue: 已有連線正在進行中，跳過重複調用。');
+    return;
+  }
+
+  // 2. 手動重整 5 秒冷卻防護 (Cooldown)
+  const now = Date.now();
+  if (!isSilent && !isForce && (now - lastManualRefreshTime < 5000)) {
+    showStatus('info', '請稍候 5 秒再重新整理，避免連線頻繁');
+    return;
+  }
+  if (!isSilent) {
+    lastManualRefreshTime = now;
+  }
+
+  isRefreshingQueue = true;
   if (!isSilent) {
     showStatus('info', '正在從 Google 試算表同步物資...');
   }
@@ -689,6 +715,7 @@ async function refreshQueue(options = {}) {
     if (resp.success && resp.data && Array.isArray(resp.data.items)) {
       items = resp.data.items;
       const failedCount = resp.data.failedCount || 0;
+      const processingCount = resp.data.processingCount || 0;
 
       // 寫入本地暫存與更新連線指示
       saveCachedItems();
@@ -697,7 +724,31 @@ async function refreshQueue(options = {}) {
       // 更新頁籤數字
       if (tabPendingCount) tabPendingCount.textContent = items.length;
 
-      // 失敗通知條狀態更新
+      // 3. 雲端 AI 辨識中通知與 15 秒短輪詢
+      if (processingCount > 0) {
+        if (processingNoticeBar) processingNoticeBar.style.display = 'block';
+        if (processingCountText) processingCountText.textContent = processingCount;
+        if (badgeProcessingPill) {
+          badgeProcessingPill.style.display = 'inline-block';
+          badgeProcessingPill.textContent = `+${processingCount} 辨識中`;
+        }
+
+        // 排程 15 秒後背景自動靜默短輪詢（最多 2 次）
+        if (processingAutoRefreshCount < 2) {
+          processingAutoRefreshCount++;
+          if (processingTimer) clearTimeout(processingTimer);
+          processingTimer = setTimeout(() => {
+            refreshQueue({ silent: true, force: true });
+          }, 15000);
+        }
+      } else {
+        if (processingNoticeBar) processingNoticeBar.style.display = 'none';
+        if (badgeProcessingPill) badgeProcessingPill.style.display = 'none';
+        processingAutoRefreshCount = 0;
+        if (processingTimer) clearTimeout(processingTimer);
+      }
+
+      // 4. 失敗通知條狀態更新 (純失敗項目)
       if (failedCount > 0) {
         failedNoticeBar.style.display = 'block';
         failedCountText.textContent = failedCount;
@@ -712,6 +763,8 @@ async function refreshQueue(options = {}) {
         if (!isSilent) {
           if (failedCount > 0) {
             showStatus('info', `目前無待刊登物資，但發現有 ${failedCount} 筆辨識失敗，可點擊上方按鈕重試。`);
+          } else if (processingCount > 0) {
+            showStatus('info', `目前有 ${processingCount} 筆物資正在雲端 AI 辨識中，約需 10~15 秒...`);
           } else {
             showStatus('info', '目前試算表中沒有待刊登物資。');
           }
@@ -720,7 +773,11 @@ async function refreshQueue(options = {}) {
         showEmptyState(false);
         renderCurrentItem();
         if (!isSilent) {
-          showStatus('success', `成功同步！共有 ${items.length} 筆待刊物資${failedCount > 0 ? ` (另有 ${failedCount} 筆待重辨)` : ''}。`);
+          const extraInfo = [];
+          if (processingCount > 0) extraInfo.push(`另有 ${processingCount} 筆辨識中`);
+          if (failedCount > 0) extraInfo.push(`${failedCount} 筆待重辨`);
+          const extraStr = extraInfo.length > 0 ? ` (${extraInfo.join('，')})` : '';
+          showStatus('success', `成功同步！共有 ${items.length} 筆待刊物資${extraStr}。`);
         }
       }
 
@@ -745,6 +802,8 @@ async function refreshQueue(options = {}) {
     if (!isSilent) {
       showStatus('error', `同步失敗：${err.message}`);
     }
+  } finally {
+    isRefreshingQueue = false;
   }
 }
 

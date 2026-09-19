@@ -296,7 +296,13 @@ function handleApiRequest(e) {
     } 
     else if (action === 'getItems') {
       const pendingData = getPendingItems();
-      result = { success: true, items: pendingData.items, failedCount: pendingData.failedCount };
+      result = { 
+        success: true, 
+        items: pendingData.items, 
+        processingItems: pendingData.processingItems,
+        processingCount: pendingData.processingCount,
+        failedCount: pendingData.failedCount 
+      };
     } 
     else if (action === 'getModels') {
       const apiKey = getGeminiApiKey();
@@ -312,6 +318,8 @@ function handleApiRequest(e) {
         success: true,
         processedCount: reprocessRes.processedCount,
         items: pendingData.items,
+        processingItems: pendingData.processingItems,
+        processingCount: pendingData.processingCount,
         failedCount: pendingData.failedCount,
         message: `已重新執行辨識，共補跑 ${reprocessRes.processedCount} 筆項目！`
       };
@@ -326,6 +334,8 @@ function handleApiRequest(e) {
       result = {
         success: true,
         items: pendingData.items,
+        processingItems: pendingData.processingItems,
+        processingCount: pendingData.processingCount,
         failedCount: pendingData.failedCount,
         message: `第 ${row} 列已重新執行辨識`
       };
@@ -404,10 +414,13 @@ function getPendingItems() {
   const sheet = getActiveSheet();
   const map = getColumnMapping(sheet);
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2 || map.status === -1) return { items: [], failedCount: 0 };
+  if (lastRow < 2 || map.status === -1) {
+    return { items: [], processingItems: [], processingCount: 0, failedCount: 0 };
+  }
 
   const data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
   const items = [];
+  const processingItems = [];
   let failedCount = 0;
   let autoReleasedCount = 0;
 
@@ -416,11 +429,67 @@ function getPendingItems() {
     const row = data[i];
     let status = String(row[map.status - 1] || '');
 
-    if (status.includes('辨識失敗') || status === 'AI辨識中') {
+    // 1. 檢查真實失敗筆數（排除正常辨識中項目）
+    if (status.includes('辨識失敗')) {
       failedCount++;
     }
 
-    // 租約逾時檢查：若為「刊登中」且超過 20 分鐘，自動重置為「待刊登」
+    // 2. AI 辨識中項目檢查（含 5 分鐘逾時看門狗機制）
+    if (status === 'AI辨識中') {
+      let isTimeout = false;
+      if (map.timestamp !== -1) {
+        const tsVal = row[map.timestamp - 1];
+        if (tsVal) {
+          const tsTime = new Date(tsVal).getTime();
+          // 若處於「AI辨識中」超過 5 分鐘，視為超時異常，自動標記為失敗以利志工重試
+          if (!isNaN(tsTime) && (Date.now() - tsTime > 5 * 60 * 1000)) {
+            Logger.log(`⏱️ 第 ${rowNum} 列物資 AI 辨識逾時（超過 5 分鐘），自動轉為「辨識失敗」！`);
+            sheet.getRange(rowNum, map.status).setValue('辨識失敗 (辨識超時，請點擊重試)');
+            if (map.error_msg !== -1) {
+              sheet.getRange(rowNum, map.error_msg).setValue('辨識執行超時（超過 5 分鐘未完成）');
+            }
+            status = '辨識失敗 (辨識超時，請點擊重試)';
+            failedCount++;
+            isTimeout = true;
+            autoReleasedCount++;
+          }
+        }
+      }
+
+      if (!isTimeout) {
+        const photoUrls = map.photoUrls !== -1 ? extractUrls(row[map.photoUrls - 1]) : [];
+        const photos = photoUrls.map(url => {
+          const fileId = extractDriveFileId(url);
+          return {
+            originalUrl: url,
+            fileId: fileId,
+            thumbnailUrl: fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w800` : url,
+            downloadUrl: fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : url
+          };
+        });
+
+        processingItems.push({
+          row: rowNum,
+          timestamp: map.timestamp !== -1 ? row[map.timestamp - 1] : '',
+          status: 'AI辨識中',
+          locked_at: '',
+          uploader: map.uploader !== -1 ? row[map.uploader - 1] : '',
+          title: '（AI 正在辨識分析中...）',
+          category1: '',
+          category1_name: '分析中',
+          category2: '',
+          category2_name: '',
+          condition: 'used',
+          quantity: 1,
+          price: 0,
+          address: map.address !== -1 ? row[map.address - 1] || '' : '',
+          description: '雲端 AI 正在分析物資照片特徵與分類，完成後將自動填入...',
+          photos: photos
+        });
+      }
+    }
+
+    // 3. 租約逾時檢查：若為「刊登中」且超過 20 分鐘，自動重置為「待刊登」
     if (status === '刊登中' && map.locked_at !== -1) {
       const lockedVal = row[map.locked_at - 1];
       if (lockedVal) {
@@ -435,6 +504,7 @@ function getPendingItems() {
       }
     }
 
+    // 4. 正式待刊登或刊登中項目
     if (status === '待刊登' || status === '刊登中') {
       const photoUrls = map.photoUrls !== -1 ? extractUrls(row[map.photoUrls - 1]) : [];
       const photos = photoUrls.map(url => {
@@ -472,7 +542,12 @@ function getPendingItems() {
     SpreadsheetApp.flush();
   }
 
-  return { items: items, failedCount: failedCount };
+  return { 
+    items: items, 
+    processingItems: processingItems,
+    processingCount: processingItems.length,
+    failedCount: failedCount 
+  };
 }
 
 /**

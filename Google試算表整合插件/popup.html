@@ -561,8 +561,17 @@
 
     <!-- 頁籤切換：待刊佇列 vs 已略過物資 -->
     <div class="tab-bar">
-      <button class="tab-btn active" id="tabPending">📋 待刊佇列 (<span id="tabPendingCount">0</span>)</button>
+      <button class="tab-btn active" id="tabPending">📋 待刊佇列 (<span id="tabPendingCount">0</span>)<span id="badgeProcessingPill" style="display: none; margin-left: 4px; font-size: 9px; background: #3182ce; color: white; padding: 1px 5px; border-radius: 10px; vertical-align: middle;">AI 辨識中</span></button>
       <button class="tab-btn" id="tabSkipped">📁 已略過 (<span id="tabSkippedCount">0</span>)</button>
+    </div>
+
+    <!-- 雲端辨識中通知條 (若有正在辨識列自動浮現) -->
+    <div id="processingNoticeBar" style="display: none; background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 8px; padding: 7px 10px; font-size: 11px; color: #2b6cb0;">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px;">
+        <span>🤖 雲端正在 AI 辨識 <strong id="processingCountText">0</strong> 筆物資...</span>
+        <span style="font-size: 9.5px; color: #2b6cb0; background: #bee3f8; padding: 2px 6px; border-radius: 4px; font-weight: 600;">⏳ 分析中</span>
+      </div>
+      <div style="font-size: 9.5px; color: #2c5282; margin-top: 2px;">約需 10~15 秒，辨識完成後將自動加入待刊清單</div>
     </div>
 
     <!-- 辨識失敗通知與重試工具條 (若有失敗列自動浮現) -->
