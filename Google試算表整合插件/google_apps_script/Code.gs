@@ -422,20 +422,29 @@ function getPendingItems() {
   const items = [];
   const processingItems = [];
   let failedCount = 0;
+  let uncompletedCount = 0;
   let autoReleasedCount = 0;
 
   for (let i = 0; i < data.length; i++) {
     const rowNum = i + 2;
     const row = data[i];
-    let status = String(row[map.status - 1] || '');
+    const statusRaw = String(row[map.status - 1] || '').trim();
+    const statusClean = statusRaw.replace(/\s+/g, '');
+    let status = statusRaw;
 
-    // 1. 檢查真實失敗筆數（排除正常辨識中項目）
-    if (status.includes('辨識失敗')) {
-      failedCount++;
+    // 統計未辨識（狀態為空）的物資列
+    if (!statusClean) {
+      uncompletedCount++;
     }
 
-    // 2. AI 辨識中項目檢查（含 5 分鐘逾時看門狗機制）
-    if (status === 'AI辨識中') {
+    // 1. 檢查真實失敗筆數（排除正常辨識中項目）
+    if (statusClean.includes('辨識失敗')) {
+      failedCount++;
+      uncompletedCount++;
+    }
+
+    // 2. AI 辨識中項目檢查（含 5 分鐘逾時看門狗機制，支援空格容錯）
+    if (statusClean.includes('辨識中')) {
       let isTimeout = false;
       if (map.timestamp !== -1) {
         const tsVal = row[map.timestamp - 1];
@@ -450,6 +459,7 @@ function getPendingItems() {
             }
             status = '辨識失敗 (辨識超時，請點擊重試)';
             failedCount++;
+            uncompletedCount++;
             isTimeout = true;
             autoReleasedCount++;
           }
@@ -490,7 +500,7 @@ function getPendingItems() {
     }
 
     // 3. 租約逾時檢查：若為「刊登中」且超過 20 分鐘，自動重置為「待刊登」
-    if (status === '刊登中' && map.locked_at !== -1) {
+    if (statusClean.includes('刊登中') && map.locked_at !== -1) {
       const lockedVal = row[map.locked_at - 1];
       if (lockedVal) {
         const lockedTime = new Date(lockedVal).getTime();
@@ -504,8 +514,8 @@ function getPendingItems() {
       }
     }
 
-    // 4. 正式待刊登或刊登中項目
-    if (status === '待刊登' || status === '刊登中') {
+    // 4. 正式待刊登或刊登中項目 (支援前後空格容錯)
+    if (statusClean.includes('待刊登') || statusClean.includes('刊登中')) {
       const photoUrls = map.photoUrls !== -1 ? extractUrls(row[map.photoUrls - 1]) : [];
       const photos = photoUrls.map(url => {
         const fileId = extractDriveFileId(url);
@@ -542,12 +552,57 @@ function getPendingItems() {
     SpreadsheetApp.flush();
   }
 
+  // 5. 智慧單例自動背景補跑（5 分鐘冷卻 + 零並發防護）
+  if (uncompletedCount > 0) {
+    maybeScheduleAutoReprocess(uncompletedCount);
+  }
+
   return { 
     items: items, 
     processingItems: processingItems,
     processingCount: processingItems.length,
     failedCount: failedCount 
   };
+}
+
+/**
+ * 智慧單例自動補跑排程模組 (5 分鐘冷卻 + 單一 Trigger 防護)
+ * 避免並發搶跑、避免爆 20 個觸發器上限、避免過度打 Gemini API
+ */
+function maybeScheduleAutoReprocess(unprocessedCount) {
+  if (unprocessedCount <= 0) return;
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const lastRun = Number(props.getProperty('LAST_AUTO_REPROCESS_TIME') || 0);
+    const now = Date.now();
+    const COOLDOWN_MS = 5 * 60 * 1000; // 5 分鐘冷卻
+
+    // 1. 冷卻時間檢查
+    if (now - lastRun < COOLDOWN_MS) {
+      Logger.log(`⏳ 距上次自動補跑未滿 5 分鐘（尚餘 ${Math.round((COOLDOWN_MS - (now - lastRun)) / 1000)} 秒），跳過本次排程。`);
+      return;
+    }
+
+    // 2. 檢查專案是否已有等待中的 processAllPendingRowsAsync 觸發器（防止累積爆 20 個上限）
+    const triggers = ScriptApp.getProjectTriggers();
+    for (const t of triggers) {
+      if (t.getHandlerFunction() === 'processAllPendingRowsAsync') {
+        Logger.log('⏳ 目前雲端已有排隊中之辨識觸發器，不重複建立。');
+        return;
+      }
+    }
+
+    // 3. 通過檢查：更新時間戳並建立一次性觸發器於 2 秒後在背景執行
+    props.setProperty('LAST_AUTO_REPROCESS_TIME', String(now));
+    ScriptApp.newTrigger('processAllPendingRowsAsync')
+      .timeBased()
+      .after(2000)
+      .create();
+    Logger.log(`🚀 偵測到有 ${unprocessedCount} 筆待辨識或未完成物資，已排程 2 秒後在背景自動補跑！`);
+  } catch (err) {
+    Logger.log(`自動排程建立失敗: ${err.message}`);
+  }
 }
 
 /**
