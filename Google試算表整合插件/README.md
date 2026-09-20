@@ -76,3 +76,23 @@ Google試算表整合插件/
    - 品名、一/二級分類、新舊、數量、單價、詳細說明、地址全自動填妥。
    - 照片自動掛載至網頁原生上傳欄位。
 5. 輸入右側驗證碼後按刊登，發布成功後自動回寫試算表狀態為「已刊登」！
+
+---
+
+## 🛠️ 維運與配額排查指南 (Quota Troubleshooting)
+
+若後續在大量使用或極端情況下，遇到 **Google Apps Script 每日配額耗盡**（如：每日觸發總執行時間 90 分鐘/天上限、觸發器建立異常）或 **Gemini API 速率上限 (429 RESOURCE_EXHAUSTED)**，請依以下步驟回到 [`Code.gs`](file:///d:/Users/Thomas/Desktop/AI/新增資料夾/扶輪公益網插件/01_電腦端/Google試算表整合插件/google_apps_script/Code.gs) 進行調整：
+
+### 檢查重點與排查位置：
+1. **排查點 1：`getPendingItems()` 未辨識統計與呼叫（約第 435~560 列）**
+   - 系統會在前端查詢佇列時，若發現有未辨識（狀態為空）或失敗物資，呼叫 `maybeScheduleAutoReprocess(uncompletedCount)` 在背景自動補跑。
+   - **應急措施**：若配額嚴重不足，可將 `maybeScheduleAutoReprocess(...)` 呼叫直接註解掉，系統會立即退回「純手動觸發辨識」模式（僅在專責人員或志工點擊重新辨識時才執行）。
+
+2. **排查點 2：`maybeScheduleAutoReprocess()` 智慧單例冷卻模組（約第 570~610 列）**
+   - 預設冷卻時間為 5 分鐘 (`const COOLDOWN_MS = 5 * 60 * 1000;`)，並限制專案同時間最多僅有 1 個非同步觸發器 (`processAllPendingRowsAsync`)。
+   - **延長冷卻間隔**：可將 `COOLDOWN_MS` 由 5 分鐘拉長至 15 或 30 分鐘，減少每日後端喚醒次數。
+   - **完全停用**：在該函式第一行直接加入 `return;` 即可關閉背景自動補跑。
+
+3. **排查點 3：清除殘留觸發器**
+   - 若曾手動測試觸發器導致累積，可前往 Google Apps Script 編輯器左側導覽列的 **「觸發條件 (Triggers)」**，手動刪除多餘或異常殘留的觸發器。
+

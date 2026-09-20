@@ -433,6 +433,9 @@ function getPendingItems() {
     let status = statusRaw;
 
     // 統計未辨識（狀態為空）的物資列
+    // 💡【維運與配額排查警語】：若未來遇到 GAS 配額耗盡（如觸發器超限、每日執行時間到達上限 90分/天、或 Gemini API 429 速率限制），
+    // 請回到此處檢查：下方第 555 列左右的 maybeScheduleAutoReprocess 會在有未辨識列時背景自動補跑。
+    // 必要時可將該呼叫註解關閉（改為志工手動點擊重整或重新辨識），或調長下方 maybeScheduleAutoReprocess 的 COOLDOWN_MS 冷卻時間。
     if (!statusClean) {
       uncompletedCount++;
     }
@@ -553,6 +556,7 @@ function getPendingItems() {
   }
 
   // 5. 智慧單例自動背景補跑（5 分鐘冷卻 + 零並發防護）
+  // 💡【配額耗盡排查點 1】：若發生配額耗盡，可直接將以下 3 列註解掉，系統將退回純手動觸發辨識模式。
   if (uncompletedCount > 0) {
     maybeScheduleAutoReprocess(uncompletedCount);
   }
@@ -568,6 +572,10 @@ function getPendingItems() {
 /**
  * 智慧單例自動補跑排程模組 (5 分鐘冷卻 + 單一 Trigger 防護)
  * 避免並發搶跑、避免爆 20 個觸發器上限、避免過度打 Gemini API
+ * 
+ * 💡【配額耗盡排查點 2】：
+ * - 若發生每日執行時間過長或 Gemini API 429 速率限制，可將 COOLDOWN_MS 由 5 分鐘拉長至 15~30 分鐘（例：15 * 60 * 1000）。
+ * - 若需要完全停用自動補跑，可直接在此函式第一行加上 return;
  */
 function maybeScheduleAutoReprocess(unprocessedCount) {
   if (unprocessedCount <= 0) return;
@@ -576,7 +584,7 @@ function maybeScheduleAutoReprocess(unprocessedCount) {
     const props = PropertiesService.getScriptProperties();
     const lastRun = Number(props.getProperty('LAST_AUTO_REPROCESS_TIME') || 0);
     const now = Date.now();
-    const COOLDOWN_MS = 5 * 60 * 1000; // 5 分鐘冷卻
+    const COOLDOWN_MS = 5 * 60 * 1000; // 預設 5 分鐘冷卻 (若需節省配額可改為 15 或 30 分鐘)
 
     // 1. 冷卻時間檢查
     if (now - lastRun < COOLDOWN_MS) {
