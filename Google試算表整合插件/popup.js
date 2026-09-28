@@ -389,10 +389,27 @@ btnReprocessAll.addEventListener('click', async () => {
   }
 });
 
+let lastReprocessTime = 0;
+
 // 重新辨識目前這筆物資
 btnReprocessCurrent.addEventListener('click', async () => {
   if (items.length === 0 || !items[currentIndex]) return;
   const currentItem = items[currentIndex];
+
+  if (currentItem.status === '刊登中') {
+    showStatus('error', '⚠️ 此物資正在刊登中（已鎖定），無法重新辨識！');
+    return;
+  }
+
+  const now = Date.now();
+  const elapsed = Math.floor((now - lastReprocessTime) / 1000);
+  if (elapsed < 10) {
+    const wait = 10 - elapsed;
+    showStatus('error', `⏳ 重新辨識冷卻中，請等待 ${wait} 秒後再試。`);
+    return;
+  }
+
+  lastReprocessTime = now;
   const currentModelChoice = modelSelect ? modelSelect.value : 'auto';
 
   btnReprocessCurrent.textContent = '⏳ 辨識中...';
@@ -409,7 +426,7 @@ btnReprocessCurrent.addEventListener('click', async () => {
 
     if (resp.success) {
       showStatus('success', `🎉 第 ${currentItem.row} 列物資已重新辨識完成！`);
-      await refreshQueue();
+      await refreshQueue({ force: true });
     } else {
       throw new Error(resp.error || '重新辨識出錯');
     }
@@ -642,7 +659,10 @@ function renderSkippedList() {
     const meta = document.createElement('div');
     meta.className = 'skipped-item-meta';
     const cat = item.category2_name ? `${item.category1_name || ''} > ${item.category2_name}` : (item.category1_name || '未分類');
-    meta.textContent = `列: ${item.row} | ${cat} | 志工: ${item.uploader || '匿名'}`;
+    const uploaderRaw = (item.uploader || '').trim();
+    const isLegacyOrEmpty = !uploaderRaw || uploaderRaw.includes('App/採集') || uploaderRaw.includes('採集端');
+    const uploaderDisplay = isLegacyOrEmpty ? '' : uploaderRaw;
+    meta.textContent = `列: ${item.row} | ${cat} | By：${uploaderDisplay}`;
 
     info.appendChild(title);
     info.appendChild(meta);
@@ -886,7 +906,10 @@ function renderCurrentItem() {
   itemDesc.textContent = item.description || '（無詳細說明）';
 
   // 5. 中繼資訊
-  metaUploader.textContent = `志工: ${item.uploader || '匿名志工'}`;
+  const uploaderRaw = (item.uploader || '').trim();
+  const isLegacyOrEmpty = !uploaderRaw || uploaderRaw.includes('App/採集') || uploaderRaw.includes('採集端');
+  const uploaderDisplay = isLegacyOrEmpty ? '' : uploaderRaw;
+  metaUploader.textContent = `By：${uploaderDisplay}`;
   metaAddress.textContent = `地址: ${item.address || '使用預設地址'}`;
 
   // 6. 按鈕狀態

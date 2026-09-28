@@ -269,7 +269,16 @@ function processAllPendingRows(manualModel) {
 // Web App API 端點 (供 Chrome 插件連線)
 // ───────────────────────────────────────────────
 function doGet(e) {
-  return handleApiRequest(e);
+  // 1. 若帶有 action 參數（例如 Chrome 插件請求資料或 ping），走原本的 API 回傳 JSON
+  if (e && e.parameter && e.parameter.action) {
+    return handleApiRequest(e);
+  }
+
+  // 2. 志工直接開啟 Web App 網址，回傳一頁式物資拍照採集網頁 (HtmlService)
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('扶輪公益網 · 物資拍照採集')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function doPost(e) {
@@ -327,6 +336,15 @@ function handleApiRequest(e) {
     else if (action === 'reprocessRow') {
       const row = parseInt(params.row || postData.row, 10);
       if (!row) throw new Error('缺少 row 參數');
+
+      // 💡 後端冷卻安全閥：防爆 Gemini Rate Limit (同一列 8 秒內重複呼叫則攔截)
+      const cache = CacheService.getScriptCache();
+      const cacheKey = 'REPROCESS_LOCK_ROW_' + row;
+      if (cache.get(cacheKey)) {
+        throw new Error('此物資剛於數秒前送出辨識，請稍候 8 秒再試以保護系統配額。');
+      }
+      cache.put(cacheKey, '1', 8);
+
       const manualModel = params.model || postData.model || '';
       const sheet = getActiveSheet();
       processRow(sheet, row, manualModel);
@@ -390,7 +408,8 @@ function handleApiRequest(e) {
       const photos = postData.photos || [];
       const address = postData.address || '';
       const note = postData.note || '';
-      result = uploadItemHandler(photos, address, note);
+      const uploader = postData.uploader || params.uploader || '';
+      result = uploadItemHandler(photos, address, note, uploader);
     }
     else {
       throw new Error('未知的 action: ' + action);
@@ -859,7 +878,7 @@ function getOrCreatePhotoFolder() {
   return DriveApp.createFolder(folderName);
 }
 
-function uploadItemHandler(photosBase64, address, note) {
+function uploadItemHandler(photosBase64, address, note, uploader) {
   if (!photosBase64 || !Array.isArray(photosBase64) || photosBase64.length === 0) {
     throw new Error('未包含任何照片資料');
   }
@@ -875,7 +894,12 @@ function uploadItemHandler(photosBase64, address, note) {
 
   photosBase64.forEach((b64, idx) => {
     try {
-      const bytes = Utilities.base64Decode(b64);
+      let cleanB64 = String(b64 || '');
+      if (cleanB64.indexOf('base64,') !== -1) {
+        cleanB64 = cleanB64.split('base64,')[1];
+      }
+      cleanB64 = cleanB64.trim();
+      const bytes = Utilities.base64Decode(cleanB64);
       const blob = Utilities.newBlob(bytes, 'image/jpeg', `mobile_${timestampStr}_${idx + 1}.jpg`);
       const file = targetFolder.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
@@ -894,9 +918,12 @@ function uploadItemHandler(photosBase64, address, note) {
   const newRowData = new Array(lastCol).fill('');
   const now = new Date();
 
+  // 處理上傳者姓名：若有填寫姓名則儲存，未填寫留白（呈現 By：留白）
+  const cleanUploader = (uploader && String(uploader).trim()) ? String(uploader).trim() : '';
+
   if (map.timestamp !== -1) newRowData[map.timestamp - 1] = now;
   if (map.photoUrls !== -1) newRowData[map.photoUrls - 1] = savedUrls.join(', ');
-  if (map.uploader !== -1) newRowData[map.uploader - 1] = 'App拍照上傳';
+  if (map.uploader !== -1) newRowData[map.uploader - 1] = cleanUploader;
   if (map.address !== -1) newRowData[map.address - 1] = address || '';
   if (map.note !== -1) newRowData[map.note - 1] = note || '';
   if (map.status !== -1) newRowData[map.status - 1] = 'AI辨識中';

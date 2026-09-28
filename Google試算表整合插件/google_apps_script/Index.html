@@ -1,0 +1,1642 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>扶輪公益網 · 物資採集與佇列管理</title>
+  
+  <meta name="theme-color" content="#8C6239">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="物資採集">
+
+  <!-- Google 字體 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary: #8C6239;
+      --primary-hover: #75512D;
+      --primary-light: #F2EBD9;
+      --accent-green: #0F9D58;
+      --accent-green-hover: #0B8043;
+      --accent-amber: #92400E;
+      --accent-amber-bg: #FEF3C7;
+      --danger: #E22E4C;
+      --danger-hover: #C5223D;
+      --bg-page: #F8F5F0;
+      --bg-card: #FFFFFF;
+      --text-main: #2C241E;
+      --text-muted: #736B63;
+      --border-color: #E5DCD1;
+      --border-focus: #8C6239;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-card: 0 4px 16px rgba(140, 98, 57, 0.08);
+      --shadow-btn: 0 4px 12px rgba(15, 157, 88, 0.28);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      line-height: 1.5;
+      padding-bottom: 30px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #8C6239 0%, #A27649 100%);
+      color: #FFFFFF;
+      padding: 14px 18px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-left, .header-right {
+      width: 38px;
+    }
+
+    .header-content {
+      flex: 1;
+      text-align: center;
+    }
+
+    .header-title {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .header-sub {
+      font-size: 11px;
+      color: #F2EBD9;
+      margin-top: 1px;
+      font-weight: 400;
+    }
+
+    .header-btn {
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      color: #FFFFFF;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .header-btn:active {
+      background: rgba(255, 255, 255, 0.38);
+      transform: scale(0.95);
+    }
+
+    .tab-nav {
+      background: #FFFFFF;
+      display: flex;
+      border-bottom: 1.5px solid var(--border-color);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+      position: sticky;
+      top: 64px;
+      z-index: 90;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 13px 10px;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: var(--text-muted);
+      font-size: 14.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      background: rgba(242, 235, 217, 0.35);
+    }
+
+    .tab-badge {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 12px;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active .tab-badge {
+      background: var(--primary);
+      color: #FFFFFF;
+    }
+
+    .container {
+      max-width: 540px;
+      margin: 14px auto;
+      padding: 0 14px;
+    }
+
+    .tab-view {
+      display: none;
+      animation: fadeInView 0.2s ease-in-out;
+    }
+
+    .tab-view.active {
+      display: block;
+    }
+
+    @keyframes fadeInView {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge-count {
+      font-size: 12px;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .photo-slots {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .photo-slot {
+      aspect-ratio: 1 / 1;
+      border: 2px dashed var(--border-color);
+      border-radius: var(--radius-md);
+      background: #FAF8F5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .photo-slot:active {
+      transform: scale(0.97);
+    }
+
+    .photo-slot.has-image {
+      border-style: solid;
+      border-color: var(--primary);
+      background: #000000;
+    }
+
+    .slot-icon {
+      font-size: 26px;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+
+    .slot-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary);
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    .slot-subtext {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .slot-preview {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+
+    .slot-delete-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 26px;
+      height: 26px;
+      background: var(--danger);
+      color: #FFFFFF;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      border: 2px solid #FFFFFF;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    .photo-slot.has-image .slot-preview,
+    .photo-slot.has-image .slot-delete-btn {
+      display: flex;
+    }
+
+    .photo-slot.has-image .slot-icon,
+    .photo-slot.has-image .slot-label,
+    .photo-slot.has-image .slot-subtext {
+      display: none;
+    }
+
+    .tips-box {
+      background: var(--primary-light);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--primary);
+      line-height: 1.4;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+
+    .form-label-desc {
+      font-size: 11px;
+      font-weight: normal;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .form-input, .form-textarea {
+      width: 100%;
+      border: 1.5px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 14px;
+      color: var(--text-main);
+      background: #FFFFFF;
+      outline: none;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+
+    .form-input:focus, .form-textarea:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(140, 98, 57, 0.12);
+    }
+
+    .form-textarea {
+      min-height: 84px;
+      resize: vertical;
+    }
+
+    .clear-btn {
+      position: absolute;
+      right: 10px;
+      background: transparent;
+      border: none;
+      font-size: 16px;
+      color: var(--text-muted);
+      padding: 4px 6px;
+      cursor: pointer;
+      display: none;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--accent-green);
+      color: #FFFFFF;
+      border: none;
+      border-radius: 28px;
+      padding: 15px 20px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      box-shadow: var(--shadow-btn);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      margin-top: 10px;
+    }
+
+    .btn-submit:active {
+      transform: scale(0.98);
+      background: var(--accent-green-hover);
+    }
+
+    .btn-submit:disabled {
+      background: #A0A0A0;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .queue-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding: 2px 4px;
+    }
+
+    .queue-stats {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .queue-stats-badge {
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .btn-refresh {
+      background: #FFFFFF;
+      border: 1.5px solid var(--border-color);
+      color: var(--primary);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      transition: all 0.2s ease;
+    }
+
+    .btn-refresh:active {
+      background: var(--primary-light);
+      transform: scale(0.96);
+    }
+
+    .queue-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-card);
+      border: 1.5px solid var(--border-color);
+      position: relative;
+      transition: all 0.25s ease;
+    }
+
+    .queue-card.is-locked {
+      border-color: var(--accent-amber);
+      border-width: 2px;
+      background: #FFFAF0;
+      box-shadow: 0 4px 18px rgba(146, 64, 14, 0.15);
+    }
+
+    .card-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+
+    .meta-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .badge-category {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+
+    .badge-locked {
+      background: var(--accent-amber);
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2.5px 8px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .meta-uploader {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+      white-space: nowrap;
+      margin-left: auto;
+    }
+
+    .card-title {
+      font-size: 16.5px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 8px;
+      line-height: 1.35;
+    }
+
+    .card-photos {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .card-thumb {
+      width: 72px;
+      height: 72px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      background: #F0ECE6;
+      flex-shrink: 0;
+      transition: transform 0.2s;
+    }
+
+    .card-thumb:active {
+      transform: scale(0.96);
+    }
+
+    .card-detail-item {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+      line-height: 1.4;
+    }
+
+    .card-desc-box {
+      background: #FAF8F5;
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      font-size: 12.5px;
+      color: #4A3E35;
+      line-height: 1.45;
+      margin: 8px 0 12px 0;
+      border-left: 3px solid var(--primary-light);
+    }
+
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border-color);
+    }
+
+    .btn-card-action {
+      flex: 1;
+      padding: 9px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-reprocess {
+      background: #FFFFFF;
+      border: 1.5px solid var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-reprocess:active:not(:disabled) {
+      background: var(--primary-light);
+      transform: scale(0.97);
+    }
+
+    .btn-delete {
+      background: #FFFFFF;
+      border: 1.5px solid var(--danger);
+      color: var(--danger);
+    }
+
+    .btn-delete:active:not(:disabled) {
+      background: #FEE2E2;
+      transform: scale(0.97);
+    }
+
+    .btn-card-action:disabled {
+      background: #EBE6DF !important;
+      border-color: #D8D1C7 !important;
+      color: #9E968D !important;
+      cursor: not-allowed !important;
+      box-shadow: none !important;
+      transform: none !important;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.8;
+    }
+
+    .empty-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 6px;
+    }
+
+    .empty-sub {
+      font-size: 13px;
+    }
+
+    .file-input-hidden {
+      display: none;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    .modal-card {
+      background: #FFFFFF;
+      width: 100%;
+      max-width: 400px;
+      border-radius: var(--radius-lg);
+      padding: 22px 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      animation: modalFadeIn 0.22s ease-out;
+    }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.92) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-icon-success {
+      width: 60px;
+      height: 60px;
+      background: #E6F4EA;
+      color: var(--accent-green);
+      font-size: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px auto;
+    }
+
+    .modal-title {
+      font-size: 17.5px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 6px;
+      text-align: center;
+    }
+
+    .modal-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 18px;
+      text-align: center;
+    }
+
+    .modal-btn-primary {
+      width: 100%;
+      background: var(--primary);
+      color: #FFFFFF;
+      border: none;
+      border-radius: 24px;
+      padding: 12px;
+      font-size: 14.5px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 8px;
+      font-family: inherit;
+    }
+
+    .modal-btn-secondary {
+      width: 100%;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 10px;
+      font-size: 13.5px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .lightbox-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.88);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 16px;
+    }
+
+    .lightbox-modal.active {
+      display: flex;
+    }
+
+    .lightbox-img {
+      max-width: 95%;
+      max-height: 85vh;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.25);
+      color: #FFFFFF;
+      font-size: 20px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #FFFFFF;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    .spinner-primary {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--primary);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: rgba(35, 30, 25, 0.94);
+      color: #FFFFFF;
+      padding: 10px 18px;
+      border-radius: 24px;
+      font-size: 13px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+      z-index: 3000;
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 頂部 Header -->
+  <header class="header">
+    <div class="header-left"></div>
+    <div class="header-content">
+      <div class="header-title">
+        <span>📦</span>
+        <span>扶輪公益網 · 物資助手</span>
+      </div>
+      <div class="header-sub">外勤隨手拍 ➔ 雲端 AI 自動辨識 ➔ 快速刊登</div>
+    </div>
+    <div class="header-right">
+      <button type="button" class="header-btn" onclick="openSettingsModal()" title="偏好設定">⚙️</button>
+    </div>
+  </header>
+
+  <!-- 雙分頁切換導航 (Tab Bar) -->
+  <nav class="tab-nav">
+    <button type="button" class="tab-btn active" id="tabBtnCapture" onclick="switchTab('capture')">
+      <span>📸 物資拍照採集</span>
+    </button>
+    <button type="button" class="tab-btn" id="tabBtnQueue" onclick="switchTab('queue')">
+      <span>📋 物資佇列</span>
+      <span class="tab-badge" id="tabQueueBadge">0</span>
+    </button>
+  </nav>
+
+  <!-- 主容器 -->
+  <main class="container">
+    
+    <!-- 第一分頁：物資拍照採集 (Capture) -->
+    <div class="tab-view active" id="viewCapture">
+      <section class="card">
+        <div class="section-header">
+          <h2 class="section-title">
+            <span>📸 物資相片</span>
+            <span class="badge-count" id="photoCountBadge">0 / 3</span>
+          </h2>
+        </div>
+
+        <div class="photo-slots">
+          <!-- 槽位 1 -->
+          <div class="photo-slot" id="slot1" onclick="triggerFileInput(1)">
+            <div class="slot-icon">📷</div>
+            <div class="slot-label">相片 1</div>
+            <div class="slot-subtext">主要正面</div>
+            <img class="slot-preview" id="preview1" alt="預覽 1">
+            <div class="slot-delete-btn" onclick="removePhoto(event, 1)" title="刪除">✕</div>
+          </div>
+
+          <!-- 槽位 2 -->
+          <div class="photo-slot" id="slot2" onclick="triggerFileInput(2)">
+            <div class="slot-icon">📷</div>
+            <div class="slot-label">相片 2</div>
+            <div class="slot-subtext">規格標籤</div>
+            <img class="slot-preview" id="preview2" alt="預覽 2">
+            <div class="slot-delete-btn" onclick="removePhoto(event, 2)" title="刪除">✕</div>
+          </div>
+
+          <!-- 槽位 3 -->
+          <div class="photo-slot" id="slot3" onclick="triggerFileInput(3)">
+            <div class="slot-icon">📷</div>
+            <div class="slot-label">相片 3</div>
+            <div class="slot-subtext">局部配件</div>
+            <img class="slot-preview" id="preview3" alt="預覽 3">
+            <div class="slot-delete-btn" onclick="removePhoto(event, 3)" title="刪除">✕</div>
+          </div>
+        </div>
+
+        <div class="tips-box">
+          <span>💡</span>
+          <span><b>建議拍照訣竅</b>：第 1 張拍整體外觀、第 2 張拍型號/規格貼紙、第 3 張拍使用痕跡或配件。</span>
+        </div>
+
+        <input type="file" id="fileInput1" class="file-input-hidden" accept="image/*" onchange="handleFileSelected(event, 1)">
+        <input type="file" id="fileInput2" class="file-input-hidden" accept="image/*" onchange="handleFileSelected(event, 2)">
+        <input type="file" id="fileInput3" class="file-input-hidden" accept="image/*" onchange="handleFileSelected(event, 3)">
+      </section>
+
+      <section class="card">
+        <div class="form-group">
+          <label class="form-label" for="inputAddress">
+            📍 物資所在地址
+            <span class="form-label-desc">(手機將自動記住)</span>
+          </label>
+          <div class="input-wrapper">
+            <input type="text" id="inputAddress" class="form-input" placeholder="例如：台南市安平區永華三街333號6樓" oninput="toggleClearBtn()">
+            <button type="button" class="clear-btn" id="btnClearAddress" onclick="clearAddress()">✕</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="inputNote">
+            📝 物資現況補充說明
+            <span class="form-label-desc">(選填，外觀看不出的細節)</span>
+          </label>
+          <textarea id="inputNote" class="form-textarea" placeholder="例如：功能正常附原廠紙箱、九成新、需自備搬運工具...（支援語音輸入 🎙️）"></textarea>
+        </div>
+
+        <button type="button" class="btn-submit" id="btnSubmit" onclick="submitItem()">
+          <span id="btnIcon">🚀</span>
+          <span id="btnText">一鍵上傳並啟動 AI 辨識</span>
+        </button>
+      </section>
+    </div>
+
+    <!-- 第二分頁：物資佇列管理 (Queue Management) -->
+    <div class="tab-view" id="viewQueue">
+      <div class="queue-topbar">
+        <div class="queue-stats" id="queueStatsText">
+          待刊登 <span class="queue-stats-badge" id="statsPendingCount">0</span> 筆 ｜ 辨識中 <span class="queue-stats-badge" id="statsProcessingCount">0</span> 筆
+        </div>
+        <button type="button" class="btn-refresh" id="btnRefreshQueue" onclick="loadQueueItems(true)">
+          <span id="refreshIcon">🔄</span>
+          <span>重新整理</span>
+        </button>
+      </div>
+
+      <div id="queueListContainer">
+        <!-- 動態渲染卡片清單 -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 成功完成彈窗 -->
+  <div class="modal-backdrop" id="successModal">
+    <div class="modal-card">
+      <div class="modal-icon-success">✓</div>
+      <h3 class="modal-title">物資登錄成功！</h3>
+      <p class="modal-desc" id="successModalDesc">
+        相片已上傳至雲端相片庫，Gemini AI 正在背景排程分析品名與分類！
+      </p>
+      <button type="button" class="modal-btn-primary" onclick="resetFormForNext()">➕ 繼續拍下一件物資</button>
+      <button type="button" class="modal-btn-secondary" onclick="goToQueueTab()">📋 前往物資佇列檢視</button>
+    </div>
+  </div>
+
+  <!-- 偏好設定彈窗 -->
+  <div class="modal-backdrop" id="settingsModal">
+    <div class="modal-card" style="text-align: left;">
+      <h3 class="modal-title">⚙️ 偏好設定</h3>
+      <p class="modal-desc" style="margin-bottom: 14px;">設定您的身分與 Google Apps Script 後端</p>
+      
+      <!-- 自訂志工姓名/暱稱 -->
+      <div class="form-group">
+        <label class="form-label">
+          👤 志工姓名 / 暱稱
+          <span class="form-label-desc">(選填)</span>
+        </label>
+        <input type="text" id="inputUploaderName" class="form-input" placeholder="例如：大安社 王大明">
+        <small style="color: var(--text-muted); font-size: 11px; display: block; margin-top: 4px;">
+          💡 填寫後，上傳的物資卡片將標註「By：您的姓名」；若留空則顯示「By：」。
+        </small>
+      </div>
+
+      <div class="form-group" style="margin-top: 14px;">
+        <label class="form-label">GAS 網頁應用程式網址</label>
+        <input type="url" id="inputGasUrl" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
+        <small style="color: var(--text-muted); font-size: 11px; display: block; margin-top: 4px;">
+          💡 若在 GAS 內部運行，系統將自動優先使用原生通道。
+        </small>
+      </div>
+
+      <button type="button" class="modal-btn-primary" style="margin-top: 16px;" onclick="saveSettings()">儲存設定</button>
+      <button type="button" class="modal-btn-secondary" onclick="closeSettingsModal()">取消</button>
+    </div>
+  </div>
+
+  <!-- 燈箱大圖預覽 -->
+  <div class="lightbox-modal" id="lightboxModal" onclick="closeLightbox()">
+    <button type="button" class="lightbox-close" onclick="closeLightbox()">✕</button>
+    <img class="lightbox-img" id="lightboxImg" src="" alt="放大相片">
+  </div>
+
+  <!-- 吐司通知 Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- 前端邏輯 -->
+  <script>
+    const STORAGE_KEY_GAS_URL = 'RCN_CAPTURE_GAS_URL';
+    const STORAGE_KEY_ADDRESS = 'RCN_CAPTURE_SAVED_ADDRESS';
+    const STORAGE_KEY_UPLOADER = 'RCN_CAPTURE_UPLOADER_NAME';
+
+    const photoSlots = [null, null, null];
+    let isReprocessingGlobal = false;
+    let currentQueueItems = [];
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initUrlParams();
+      loadSavedAddress();
+      updateBadge();
+      loadQueueItems(false);
+    });
+
+    function initUrlParams() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const apiParam = urlParams.get('api');
+      if (apiParam && apiParam.startsWith('http')) {
+        localStorage.setItem(STORAGE_KEY_GAS_URL, apiParam.trim());
+      }
+      const nameParam = urlParams.get('name');
+      if (nameParam && nameParam.trim()) {
+        localStorage.setItem(STORAGE_KEY_UPLOADER, nameParam.trim());
+      }
+    }
+
+    function getGasUrl() {
+      return localStorage.getItem(STORAGE_KEY_GAS_URL) || window.location.href.split('?')[0];
+    }
+
+    function getUploaderName() {
+      return (localStorage.getItem(STORAGE_KEY_UPLOADER) || '').trim();
+    }
+
+    function openSettingsModal() {
+      document.getElementById('inputGasUrl').value = getGasUrl();
+      document.getElementById('inputUploaderName').value = getUploaderName();
+      document.getElementById('settingsModal').classList.add('active');
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settingsModal').classList.remove('active');
+    }
+
+    function saveSettings() {
+      const gasVal = document.getElementById('inputGasUrl').value.trim();
+      if (gasVal && !gasVal.startsWith('http')) {
+        alert('請輸入有效的網址 (需以 https:// 開頭)');
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY_GAS_URL, gasVal);
+
+      const nameVal = document.getElementById('inputUploaderName').value.trim();
+      localStorage.setItem(STORAGE_KEY_UPLOADER, nameVal);
+
+      closeSettingsModal();
+      showToast('✅ 設定已儲存！');
+    }
+
+    function switchTab(tabKey) {
+      const btnCapture = document.getElementById('tabBtnCapture');
+      const btnQueue = document.getElementById('tabBtnQueue');
+      const viewCapture = document.getElementById('viewCapture');
+      const viewQueue = document.getElementById('viewQueue');
+
+      if (tabKey === 'capture') {
+        btnCapture.classList.add('active');
+        btnQueue.classList.remove('active');
+        viewCapture.classList.add('active');
+        viewQueue.classList.remove('active');
+      } else {
+        btnCapture.classList.remove('active');
+        btnQueue.classList.add('active');
+        viewCapture.classList.remove('active');
+        viewQueue.classList.add('active');
+        loadQueueItems(true);
+      }
+    }
+
+    function goToQueueTab() {
+      closeSuccessModal();
+      switchTab('queue');
+    }
+
+    // 採集與壓圖
+    function loadSavedAddress() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_ADDRESS);
+        if (saved) {
+          const input = document.getElementById('inputAddress');
+          input.value = saved;
+          toggleClearBtn();
+        }
+      } catch (e) {
+        console.warn('無法讀取 localStorage:', e);
+      }
+    }
+
+    function saveAddress(address) {
+      try {
+        if (address && address.trim()) {
+          localStorage.setItem(STORAGE_KEY_ADDRESS, address.trim());
+        }
+      } catch (e) {
+        console.warn('無法儲存至 localStorage:', e);
+      }
+    }
+
+    function toggleClearBtn() {
+      const input = document.getElementById('inputAddress');
+      const clearBtn = document.getElementById('btnClearAddress');
+      clearBtn.style.display = input.value.trim() ? 'block' : 'none';
+    }
+
+    function clearAddress() {
+      const input = document.getElementById('inputAddress');
+      input.value = '';
+      toggleClearBtn();
+      input.focus();
+    }
+
+    function triggerFileInput(slotIndex) {
+      const fileInput = document.getElementById(`fileInput${slotIndex}`);
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+      }
+    }
+
+    async function handleFileSelected(event, slotIndex) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      showToast(`正在壓縮相片 ${slotIndex}...`);
+
+      try {
+        const compressedBase64 = await compressImage(file, 1600, 0.82);
+        photoSlots[slotIndex - 1] = compressedBase64;
+
+        const slotEl = document.getElementById(`slot${slotIndex}`);
+        const previewEl = document.getElementById(`preview${slotIndex}`);
+        previewEl.src = `data:image/jpeg;base64,${compressedBase64}`;
+        slotEl.classList.add('has-image');
+
+        updateBadge();
+        showToast(`相片 ${slotIndex} 已備妥！`);
+      } catch (err) {
+        console.error('相片處理失敗:', err);
+        showToast('相片讀取失敗，請重試');
+      }
+    }
+
+    function removePhoto(event, slotIndex) {
+      event.stopPropagation();
+      photoSlots[slotIndex - 1] = null;
+
+      const slotEl = document.getElementById(`slot${slotIndex}`);
+      const previewEl = document.getElementById(`preview${slotIndex}`);
+      previewEl.src = '';
+      slotEl.classList.remove('has-image');
+
+      const fileInput = document.getElementById(`fileInput${slotIndex}`);
+      if (fileInput) fileInput.value = '';
+
+      updateBadge();
+      showToast(`已移除相片 ${slotIndex}`);
+    }
+
+    function updateBadge() {
+      const count = photoSlots.filter(Boolean).length;
+      document.getElementById('photoCountBadge').textContent = `${count} / 3`;
+    }
+
+    function compressImage(file, maxDimension, quality) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > maxDimension) {
+                height = Math.round((height * maxDimension) / width);
+                width = maxDimension;
+              }
+            } else {
+              if (height > maxDimension) {
+                width = Math.round((width * maxDimension) / height);
+                height = maxDimension;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            const base64 = dataUrl.split(',')[1];
+            resolve(base64);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function submitItem() {
+      const activePhotos = photoSlots.filter(Boolean);
+      if (activePhotos.length === 0) {
+        showToast('⚠️ 請至少拍攝或選取一張照片喔！');
+        document.getElementById('slot1').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+
+      const addressInput = document.getElementById('inputAddress');
+      const address = addressInput.value.trim();
+      const note = document.getElementById('inputNote').value.trim();
+      const uploader = getUploaderName();
+
+      if (address) {
+        saveAddress(address);
+      }
+
+      setSubmittingState(true, `準備上傳 (${activePhotos.length} 張照片)...`);
+
+      // 在 GAS iframe 環境下支援 google.script.run
+      if (window.google && google.script && google.script.run) {
+        setSubmittingState(true, '正在上傳 Google 雲端並觸發 AI...');
+        google.script.run
+          .withSuccessHandler((res) => {
+            setSubmittingState(false);
+            handleSubmitSuccess(res);
+            loadQueueItems(false);
+          })
+          .withFailureHandler((err) => {
+            setSubmittingState(false);
+            alert(`上傳失敗：${err.message || err}`);
+          })
+          .uploadItemHandler(activePhotos, address, note, uploader);
+        return;
+      }
+
+      // 備援 fetch
+      try {
+        setSubmittingState(true, '傳送至 Google 雲端並觸發 AI...');
+        const currentUrl = getGasUrl();
+        const response = await fetch(currentUrl, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'uploadItem',
+            photos: activePhotos,
+            address: address,
+            note: note,
+            uploader: uploader
+          })
+        });
+        const res = await response.json();
+        setSubmittingState(false);
+
+        if (res && res.success) {
+          handleSubmitSuccess(res);
+          loadQueueItems(false);
+        } else {
+          alert(`上傳失敗：${(res && res.error) || '未知錯誤'}`);
+        }
+      } catch (err) {
+        setSubmittingState(false);
+        console.error('上傳異常:', err);
+        alert(`連線伺服器失敗：${err.message || err}`);
+      }
+    }
+
+    function setSubmittingState(isSubmitting, statusText) {
+      const btn = document.getElementById('btnSubmit');
+      const btnIcon = document.getElementById('btnIcon');
+      const btnText = document.getElementById('btnText');
+
+      if (isSubmitting) {
+        btn.disabled = true;
+        btnIcon.innerHTML = '<span class="spinner"></span>';
+        btnText.textContent = statusText || '資料上傳中...';
+      } else {
+        btn.disabled = false;
+        btnIcon.innerHTML = '🚀';
+        btnText.textContent = '一鍵上傳並啟動 AI 辨識';
+      }
+    }
+
+    function handleSubmitSuccess(res) {
+      const modal = document.getElementById('successModal');
+      const descEl = document.getElementById('successModalDesc');
+      if (res && res.message) {
+        descEl.innerHTML = `${res.message}<br><br><span style="color:#8C6239;font-weight:600;">感謝您的愛心付出，審核志工隨後將進行刊登確認！</span>`;
+      }
+      modal.classList.add('active');
+    }
+
+    function closeSuccessModal() {
+      document.getElementById('successModal').classList.remove('active');
+    }
+
+    function resetFormForNext() {
+      closeSuccessModal();
+
+      for (let i = 1; i <= 3; i++) {
+        photoSlots[i - 1] = null;
+        const slotEl = document.getElementById(`slot${i}`);
+        const previewEl = document.getElementById(`preview${i}`);
+        if (previewEl) previewEl.src = '';
+        if (slotEl) slotEl.classList.remove('has-image');
+        const fileInput = document.getElementById(`fileInput${i}`);
+        if (fileInput) fileInput.value = '';
+      }
+
+      document.getElementById('inputNote').value = '';
+      updateBadge();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showToast('✨ 已為您準備好拍攝下一件物資！');
+    }
+
+    // 佇列管理
+    async function loadQueueItems(showToastFlag) {
+      const refreshIcon = document.getElementById('refreshIcon');
+      if (refreshIcon) refreshIcon.classList.add('spinner-primary');
+
+      const handleResult = (res) => {
+        if (refreshIcon) refreshIcon.classList.remove('spinner-primary');
+        if (res && res.success) {
+          currentQueueItems = res.items || [];
+          const processingCount = res.processingCount || 0;
+          document.getElementById('statsPendingCount').textContent = currentQueueItems.length;
+          document.getElementById('statsProcessingCount').textContent = processingCount;
+          document.getElementById('tabQueueBadge').textContent = currentQueueItems.length;
+          renderQueueList(currentQueueItems);
+          if (showToastFlag) showToast(`✅ 佇列已更新，共 ${currentQueueItems.length} 筆物資`);
+        }
+      };
+
+      if (window.google && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(handleResult)
+          .withFailureHandler((err) => {
+            if (refreshIcon) refreshIcon.classList.remove('spinner-primary');
+            console.warn('載入佇列失敗:', err);
+          })
+          .getPendingItems();
+        return;
+      }
+
+      try {
+        const gasUrl = getGasUrl();
+        const response = await fetch(gasUrl, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'getItems' })
+        });
+        const res = await response.json();
+        handleResult(res);
+      } catch (err) {
+        if (refreshIcon) refreshIcon.classList.remove('spinner-primary');
+        console.warn('載入佇列失敗:', err);
+      }
+    }
+
+    function renderQueueList(items) {
+      const container = document.getElementById('queueListContainer');
+      if (!container) return;
+
+      if (!items || items.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🎉</div>
+            <div class="empty-title">目前沒有待刊物資</div>
+            <div class="empty-sub">太棒了！所有物資皆已刊登完成。</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = items.map((item) => {
+        const row = item.row;
+        const status = String(item.status || '').trim();
+        const isLocked = status.includes('刊登中');
+        
+        let rawUploader = String(item.uploader || '').trim();
+        let displayUploaderName = '';
+        if (rawUploader && !rawUploader.includes('App') && !rawUploader.includes('採集')) {
+          displayUploaderName = rawUploader;
+        }
+        const byText = `By：${displayUploaderName}`;
+
+        let categoryText = item.category1_name || '未分類';
+        if (item.category2_name) {
+          categoryText += ` ➔ ${item.category2_name}`;
+        }
+
+        let thumbsHtml = '';
+        if (item.photos && item.photos.length > 0) {
+          thumbsHtml = `
+            <div class="card-photos">
+              ${item.photos.map(p => `
+                <img class="card-thumb" src="${p.thumbnailUrl || p.originalUrl}" alt="縮圖" 
+                     onclick="openLightbox('${p.originalUrl || p.thumbnailUrl}')" loading="lazy">
+              `).join('')}
+            </div>
+          `;
+        }
+
+        const conditionText = (item.condition === 'new') ? '全新未拆' : '二手良品';
+        const qtyText = item.quantity ? `${item.quantity} 件` : '1 件';
+        const disabledAttr = isLocked ? 'disabled' : '';
+
+        return `
+          <div class="queue-card ${isLocked ? 'is-locked' : ''}" id="queueCard_${row}">
+            <div class="card-meta-row">
+              <div class="meta-left">
+                <span class="badge-category">${escapeHtml(categoryText)}</span>
+                ${isLocked ? '<span class="badge-locked">🔒 刊登中</span>' : ''}
+              </div>
+              <div class="meta-uploader">${escapeHtml(byText)}</div>
+            </div>
+
+            <h3 class="card-title">${escapeHtml(item.title || '（AI 辨識品名整理中）')}</h3>
+
+            ${thumbsHtml}
+
+            <div class="card-detail-item">
+              <span>📍</span>
+              <span>${escapeHtml(item.address || '未指定自取地址')}</span>
+            </div>
+            <div class="card-detail-item">
+              <span>📦</span>
+              <span>${conditionText} ｜ 數量：${qtyText}</span>
+            </div>
+
+            ${item.description ? `
+              <div class="card-desc-box">${escapeHtml(item.description)}</div>
+            ` : ''}
+
+            <div class="card-actions">
+              <button type="button" class="btn-card-action btn-reprocess" id="btnReprocess_${row}" 
+                      ${disabledAttr} onclick="reprocessSingleItem(${row}, '${escapeJs(item.title || '')}')">
+                <span id="reprocessIcon_${row}">🔄</span>
+                <span id="reprocessText_${row}">重新辨識</span>
+              </button>
+
+              <button type="button" class="btn-card-action btn-delete" id="btnDelete_${row}" 
+                      ${disabledAttr} onclick="deleteSingleItem(${row}, '${escapeJs(item.title || '此物資')}')">
+                <span>🗑️ 刪除本列</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function reprocessSingleItem(row, title) {
+      if (isReprocessingGlobal) {
+        showToast('⚠️ 目前已有物資正在分析中，請稍候片刻！');
+        return;
+      }
+
+      const btn = document.getElementById(`btnReprocess_${row}`);
+      const btnIcon = document.getElementById(`reprocessIcon_${row}`);
+      const btnText = document.getElementById(`reprocessText_${row}`);
+      if (!btn) return;
+
+      isReprocessingGlobal = true;
+      btn.disabled = true;
+      btnIcon.innerHTML = '<span class="spinner-primary"></span>';
+      btnText.textContent = '⏳ 分析中...';
+
+      try {
+        const gasUrl = getGasUrl();
+        const response = await fetch(gasUrl, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'reprocessRow',
+            row: row
+          })
+        });
+        const res = await response.json();
+
+        if (res && res.success) {
+          showToast(`🎉 「${title || '物資'}」已重新辨識完成！`);
+          if (res.items) {
+            currentQueueItems = res.items;
+            renderQueueList(currentQueueItems);
+          }
+        } else {
+          alert(`重新辨識失敗：${(res && res.error) || '未知錯誤'}`);
+          btn.disabled = false;
+          btnIcon.innerHTML = '🔄';
+          btnText.textContent = '重新辨識';
+        }
+      } catch (err) {
+        console.error('重辨出錯:', err);
+        alert(`連線伺服器異常：${err.message}`);
+        btn.disabled = false;
+        btnIcon.innerHTML = '🔄';
+        btnText.textContent = '重新辨識';
+      } finally {
+        isReprocessingGlobal = false;
+        startCooldownTimer(row);
+      }
+    }
+
+    function startCooldownTimer(row) {
+      const btn = document.getElementById(`btnReprocess_${row}`);
+      const btnIcon = document.getElementById(`reprocessIcon_${row}`);
+      const btnText = document.getElementById(`reprocessText_${row}`);
+      if (!btn) return;
+
+      btn.disabled = true;
+      let remainSec = 10;
+      btnIcon.innerHTML = '⏳';
+      btnText.textContent = `冷卻中 (${remainSec}s)`;
+
+      const timer = setInterval(() => {
+        remainSec--;
+        if (remainSec > 0) {
+          btnText.textContent = `冷卻中 (${remainSec}s)`;
+        } else {
+          clearInterval(timer);
+          btn.disabled = false;
+          btnIcon.innerHTML = '🔄';
+          btnText.textContent = '重新辨識';
+        }
+      }, 1000);
+    }
+
+    async function deleteSingleItem(row, title) {
+      const confirmDelete = window.confirm(`確定要刪除「${title}」嗎？\n\n⚠️ 關聯的雲端相片也將同步移至垃圾桶以釋放空間。`);
+      if (!confirmDelete) return;
+
+      const btnDelete = document.getElementById(`btnDelete_${row}`);
+      if (btnDelete) {
+        btnDelete.disabled = true;
+        btnDelete.innerHTML = '<span class="spinner-primary"></span> 刪除中...';
+      }
+
+      try {
+        const gasUrl = getGasUrl();
+        const response = await fetch(gasUrl, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'deleteItem',
+            row: row
+          })
+        });
+        const res = await response.json();
+
+        if (res && res.success) {
+          showToast(`🗑️ 已刪除「${title}」！`);
+          const cardEl = document.getElementById(`queueCard_${row}`);
+          if (cardEl) {
+            cardEl.style.transition = 'all 0.3s ease';
+            cardEl.style.opacity = '0';
+            cardEl.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+              loadQueueItems(false);
+            }, 300);
+          } else {
+            loadQueueItems(false);
+          }
+        } else {
+          alert(`刪除失敗：${(res && res.error) || '未知錯誤'}`);
+          if (btnDelete) {
+            btnDelete.disabled = false;
+            btnDelete.innerHTML = '🗑️ 刪除本列';
+          }
+        }
+      } catch (err) {
+        console.error('刪除出錯:', err);
+        alert(`連線伺服器異常：${err.message}`);
+        if (btnDelete) {
+          btnDelete.disabled = false;
+          btnDelete.innerHTML = '🗑️ 刪除本列';
+        }
+      }
+    }
+
+    function openLightbox(url) {
+      if (!url) return;
+      document.getElementById('lightboxImg').src = url;
+      document.getElementById('lightboxModal').classList.add('active');
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightboxModal').classList.remove('active');
+      document.getElementById('lightboxImg').src = '';
+    }
+
+    let toastTimer = null;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2500);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function escapeJs(str) {
+      if (!str) return '';
+      return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"');
+    }
+  </script>
+</body>
+</html>
