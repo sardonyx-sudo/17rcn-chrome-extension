@@ -696,24 +696,34 @@ window.addEventListener('rcn_page_alert', (e) => {
 })();
 
 // ───────────────────────────────────────────────
-// 防送出衝突保護盾 (Anti-Double-Submit)
+// 沙盒測試模式 (Mock Sandbox) 與 防送出衝突保護盾 (Anti-Double-Submit)
 // ───────────────────────────────────────────────
+let isSandboxModeActive = true;
 let isProtectionActive = false;
 let isSubmitting = false;
 let submitProtectionTimer = null;
 
 function initAntiDoubleSubmit() {
-  chrome.storage.local.get('rcn_anti_double_submit', res => {
+  chrome.storage.local.get(['rcn_anti_double_submit', 'rcn_mock_sandbox_mode'], res => {
     isProtectionActive = res.rcn_anti_double_submit !== false;
-    syncProtectionStateToPage(isProtectionActive);
+    isSandboxModeActive = res.rcn_mock_sandbox_mode !== false; // 預設開啟沙盒
+    syncProtectionStateToPage(isProtectionActive, isSandboxModeActive);
+    updateSandboxBanner(isSandboxModeActive);
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && 'rcn_anti_double_submit' in changes) {
-      isProtectionActive = changes.rcn_anti_double_submit.newValue !== false;
-      syncProtectionStateToPage(isProtectionActive);
-      if (!isProtectionActive && isSubmitting) {
-        resetSubmitState();
+    if (area === 'local') {
+      if ('rcn_anti_double_submit' in changes) {
+        isProtectionActive = changes.rcn_anti_double_submit.newValue !== false;
+        syncProtectionStateToPage(isProtectionActive, isSandboxModeActive);
+        if (!isProtectionActive && isSubmitting) {
+          resetSubmitState();
+        }
+      }
+      if ('rcn_mock_sandbox_mode' in changes) {
+        isSandboxModeActive = changes.rcn_mock_sandbox_mode.newValue !== false;
+        syncProtectionStateToPage(isProtectionActive, isSandboxModeActive);
+        updateSandboxBanner(isSandboxModeActive);
       }
     }
   });
@@ -721,10 +731,55 @@ function initAntiDoubleSubmit() {
   setupSubmitProtection();
 }
 
-function syncProtectionStateToPage(active) {
+function syncProtectionStateToPage(active, sandboxActive) {
   injectScript(`
     window.__rcn_anti_double = ${JSON.stringify(active)};
+    window.__rcn_mock_sandbox = ${JSON.stringify(sandboxActive)};
   `);
+}
+
+function updateSandboxBanner(active) {
+  let banner = document.getElementById('rcn-sandbox-banner');
+  if (active) {
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'rcn-sandbox-banner';
+      banner.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">🧪</span>
+          <span><strong>【沙盒測試模式】</strong>點擊「送出」將會被安全攔截，不會提交至 17rcn 正式網站，可安全模擬驗證！</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 11px; background: rgba(0,0,0,0.25); padding: 3px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.25);">
+            🛡️ 安全隔離中
+          </span>
+        </div>
+      `;
+      banner.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 999999;
+        background: linear-gradient(90deg, #92400e, #b45309);
+        color: #ffffff;
+        padding: 9px 18px;
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      `;
+      document.body.prepend(banner);
+      document.body.style.paddingTop = '42px';
+    }
+  } else {
+    if (banner) {
+      banner.remove();
+      document.body.style.paddingTop = '';
+    }
+  }
 }
 
 function setupSubmitProtection() {
@@ -734,7 +789,7 @@ function setupSubmitProtection() {
 
   if (!form || !btn) return;
 
-  // 1. 注入主世界：攔截底層 form.submit() 方法（防止 jQuery Validate 與 reCAPTCHA 的衝突二次調用）
+  // 1. 注入主世界：攔截底層 form.submit() 方法（防止 jQuery Validate 與 reCAPTCHA 的衝突二次調用；沙盒模式阻斷）
   injectScript(`
     (function() {
       var form = document.getElementById('form1');
@@ -746,6 +801,12 @@ function setupSubmitProtection() {
       var lastSubmitTime = 0;
 
       form.submit = function() {
+        if (window.__rcn_mock_sandbox) {
+          console.log('[RCN沙盒測試版] 攔截到主世界 form.submit()，阻斷真實送出！');
+          window.dispatchEvent(new CustomEvent('rcn_sandbox_submit_intercepted'));
+          return false;
+        }
+
         var now = Date.now();
         if (window.__rcn_anti_double && isDirectSubmitting && (now - lastSubmitTime < 30000)) {
           console.warn('[RCN試算表保護盾] 成功攔截雙重送出衝突！');
@@ -766,6 +827,12 @@ function setupSubmitProtection() {
     })();
   `);
 
+  window.addEventListener('rcn_sandbox_submit_intercepted', function() {
+    if (isSandboxModeActive) {
+      showSandboxMockModal(btn);
+    }
+  });
+
   window.addEventListener('rcn_direct_submit_fired', function() {
     if (isProtectionActive && !isSubmitting) {
       enterSubmittingState(btn);
@@ -774,6 +841,13 @@ function setupSubmitProtection() {
 
   // 2. 攔截使用者按鈕點擊
   btn.addEventListener('click', function(e) {
+    if (isSandboxModeActive) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      showSandboxMockModal(btn);
+      return false;
+    }
+
     if (!isProtectionActive) return;
     if (isSubmitting) {
       e.preventDefault();
@@ -785,6 +859,13 @@ function setupSubmitProtection() {
 
   // 3. 監聽表單 submit 事件
   form.addEventListener('submit', function(e) {
+    if (isSandboxModeActive) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      showSandboxMockModal(btn);
+      return false;
+    }
+
     if (!isProtectionActive) return;
 
     if (isSubmitting) {
@@ -874,5 +955,154 @@ function resetSubmitState() {
   `);
 }
 
-// 啟動防送出衝突保護
+function showSandboxMockModal(btn) {
+  // 檢查是否已有視窗
+  let overlay = document.getElementById('rcn-sandbox-modal-overlay');
+  if (overlay) {
+    overlay.remove();
+  }
+
+  // 收集當前表單狀態
+  const titleVal = (document.querySelector('input[name="SR_title"]') || document.getElementById('SR_title'))?.value?.trim() || '(未填寫)';
+  const moneyVal = (document.querySelector('input[name="SR_money"]') || document.getElementById('SR_money'))?.value || '0';
+  const amountVal = (document.querySelector('input[name="SR_amount"]') || document.getElementById('SR_amount'))?.value || '1';
+  const checkwordVal = (document.querySelector('input[name="checkword"]'))?.value?.trim() || '(未輸入)';
+  
+  const photo1 = document.getElementById('photo1')?.files?.length ? `✅ ${document.getElementById('photo1').files[0].name}` : '未選擇';
+  const photo2 = document.getElementById('photo2')?.files?.length ? `✅ ${document.getElementById('photo2').files[0].name}` : '未選擇';
+  const photo3 = document.getElementById('photo3')?.files?.length ? `✅ ${document.getElementById('photo3').files[0].name}` : '未選擇';
+
+  const queueInfo = currentActiveItem && currentActiveItem.row 
+    ? `第 ${currentActiveItem.row} 列「${currentActiveItem.title}」` 
+    : '無（單機手動填寫或未選取佇列物資）';
+
+  console.log('🧪 [RCN沙盒測試版] 表單已安全攔截！快照資訊：', {
+    物資品名: titleVal,
+    預估金額: moneyVal,
+    數量: amountVal,
+    驗證碼: checkwordVal,
+    照片一: photo1,
+    照片二: photo2,
+    照片三: photo3,
+    目前鎖定佇列: queueInfo
+  });
+
+  overlay = document.createElement('div');
+  overlay.id = 'rcn-sandbox-modal-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 1000000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  `;
+
+  overlay.innerHTML = `
+    <div style="background: #ffffff; border-radius: 14px; width: 470px; max-width: 92vw; box-shadow: 0 20px 40px rgba(0,0,0,0.3); overflow: hidden; border: 1px solid #e2e8f0; animation: rcnFadeIn 0.2s ease-out;">
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #78350f, #b45309); color: white; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">🧪</span>
+          <div>
+            <div style="font-weight: 700; font-size: 15px;">沙盒模擬送出 (Mock Sandbox)</div>
+            <div style="font-size: 11px; opacity: 0.9;">表單已安全攔截，100% 未向 17rcn 正式網站發送請求</div>
+          </div>
+        </div>
+        <button id="rcn-modal-close-x" style="background: transparent; border: none; color: white; font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+      </div>
+
+      <!-- Body / Form Inspection -->
+      <div style="padding: 16px 18px; font-size: 12.5px; color: #334155;">
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px;">
+          <div style="font-weight: 700; color: #1e293b; margin-bottom: 6px; font-size: 13px;">📋 攔截欄位快照：</div>
+          <div style="display: grid; grid-template-columns: 80px 1fr; gap: 4px; font-size: 12px;">
+            <span style="color: #64748b;">物資品名：</span><strong style="color: #0f172a;">${titleVal}</strong>
+            <span style="color: #64748b;">金　　額：</span><span>${moneyVal} 元 / ${amountVal} 件</span>
+            <span style="color: #64748b;">驗 證 碼：</span><span style="font-family: monospace; font-weight: 700; color: #d97706;">${checkwordVal}</span>
+            <span style="color: #64748b;">照片檔案：</span><span style="font-size: 11px; color: #475569;">${photo1} / ${photo2}</span>
+            <span style="color: #64748b;">關聯佇列：</span><span style="font-size: 11px; color: #0284c7;">${queueInfo}</span>
+          </div>
+        </div>
+
+        <p style="margin-bottom: 12px; color: #475569; font-size: 12px; line-height: 1.5;">
+          請選擇您希望模擬的送出結果，以驗證前後端聯動與錯誤保護機制：
+        </p>
+
+        <!-- Actions -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button id="rcn-modal-btn-success" style="background: #0f9d58; color: white; border: none; border-radius: 8px; padding: 10px 14px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(15,157,88,0.25); transition: background 0.2s;">
+            <span>🎉 模擬刊登成功 (回寫試算表標記「已刊登」)</span>
+            <span style="font-size: 11px; font-weight: normal; opacity: 0.85;">走成功流程 ➔</span>
+          </button>
+
+          <button id="rcn-modal-btn-error" style="background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3; border-radius: 8px; padding: 9px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.2s;">
+            <span>⚠️ 模擬驗證碼錯誤 (測試防重複保護盾阻斷)</span>
+            <span style="font-size: 11px; font-weight: normal; opacity: 0.85;">走失敗阻斷 ➔</span>
+          </button>
+
+          <button id="rcn-modal-btn-cancel" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 4px;">
+            ❌ 取消關閉 (不執行任何模擬)
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // 關閉視窗邏輯
+  const closeModal = () => {
+    overlay.remove();
+  };
+
+  overlay.querySelector('#rcn-modal-close-x').addEventListener('click', closeModal);
+  overlay.querySelector('#rcn-modal-btn-cancel').addEventListener('click', closeModal);
+
+  // 1. 模擬成功
+  overlay.querySelector('#rcn-modal-btn-success').addEventListener('click', () => {
+    closeModal();
+    enterSubmittingState(btn);
+    showToast('⏳ [沙盒模擬] 正在模擬上傳中，請稍候...');
+
+    setTimeout(() => {
+      if (currentActiveItem && currentActiveItem.row && currentGasUrl) {
+        chrome.runtime.sendMessage({
+          action: 'item_published_success',
+          row: currentActiveItem.row,
+          gasUrl: currentGasUrl
+        });
+        showToast(`🎉 [沙盒模擬] 物資「${currentActiveItem.title}」已成功模擬刊登，並通知試算表標為「已刊登」！`);
+        currentActiveItem = null;
+      } else {
+        showToast('🎉 [沙盒模擬] 刊登成功！（目前無鎖定之佇列物資，未發送 GAS 回寫）');
+      }
+      resetSubmitState();
+    }, 1000);
+  });
+
+  // 2. 模擬驗證碼錯誤
+  overlay.querySelector('#rcn-modal-btn-error').addEventListener('click', () => {
+    closeModal();
+    enterSubmittingState(btn);
+
+    setTimeout(() => {
+      // 觸發自定義錯誤 alert 事件
+      window.dispatchEvent(new CustomEvent('rcn_page_alert', { 
+        detail: { message: '驗證碼不正確，請重新輸入' } 
+      }));
+      showToast('⚠️ [沙盒模擬] 模擬驗證碼錯誤：保護盾已成功阻斷，試算表保持原狀！');
+      resetSubmitState();
+    }, 600);
+  });
+}
+
+// 啟動防送出衝突保護與沙盒模式
 initAntiDoubleSubmit();
+

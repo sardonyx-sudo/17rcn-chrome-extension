@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>扶輪公益網 - Google 試算表整合版</title>
+  <title>扶輪公益網 - Google 試算表整合版 (沙盒測試版)</title>
   <style>
     * {
       box-sizing: border-box;
@@ -612,7 +612,7 @@
       <span class="header-icon">📊</span>
       <div class="header-text">
         <h1>扶輪公益網 AI 助手</h1>
-        <p>Google 試算表佇列版</p>
+        <p>Google 試算表佇列版 (沙盒版)</p>
       </div>
     </div>
     <div class="connection-badge">
@@ -659,8 +659,20 @@
           <input type="text" id="defaultAddressInput" placeholder="例如：台北市中正區忠孝東路一段1號" style="width: 100%; margin-top: 3px;">
         </div>
 
+        <!-- 沙盒測試模式 Switch -->
+        <div style="margin-top: 10px; padding: 9px 12px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 11.5px; font-weight: 700; color: #92400E;">🧪 沙盒測試模式 (Mock Sandbox)：</div>
+            <div style="font-size: 9.5px; color: #B45309; line-height: 1.3; margin-top: 2px;">點「送出」不發送至 17rcn，彈窗選擇模擬成功或錯誤</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="mockSandboxMode" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
         <!-- 防送出衝突保護 Switch -->
-        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #EAE4DD; display: flex; justify-content: space-between; align-items: center;">
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #EAE4DD; display: flex; justify-content: space-between; align-items: center;">
           <div>
             <div style="font-size: 11px; font-weight: 600; color: #4A3E35;">🛡️ 防送出衝突保護：</div>
             <div style="font-size: 9.5px; color: #7A6E63;">表單送出後自動鎖定，防止重複連點</div>
