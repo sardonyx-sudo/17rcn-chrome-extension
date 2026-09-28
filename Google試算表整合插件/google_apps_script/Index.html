@@ -1427,7 +1427,10 @@
           `;
         }
 
+        // 新舊、金額與數量
         const conditionText = (item.condition === 'new') ? '全新未拆' : '二手良品';
+        const priceVal = (item.price !== undefined && item.price !== null && String(item.price).trim() !== '') ? String(item.price).trim() : '0';
+        const priceText = `NT$ ${priceVal}`;
         const qtyText = item.quantity ? `${item.quantity} 件` : '1 件';
         const disabledAttr = isLocked ? 'disabled' : '';
 
@@ -1451,7 +1454,7 @@
             </div>
             <div class="card-detail-item">
               <span>📦</span>
-              <span>${conditionText} ｜ 數量：${qtyText}</span>
+              <span>${conditionText} ｜ ${priceText} ｜ 數量：${qtyText}</span>
             </div>
 
             ${item.description ? `
