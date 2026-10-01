@@ -472,6 +472,36 @@
       box-shadow: 0 4px 18px rgba(146, 64, 14, 0.15);
     }
 
+    /* AI 辨識中高亮邊框與卡片背景（比照 Android 原生 App 天藍色系） */
+    .queue-card.is-processing {
+      border-color: #0284C7;
+      border-width: 2px;
+      background: #F0F9FF;
+      box-shadow: 0 4px 18px rgba(2, 132, 199, 0.15);
+    }
+
+    .badge-processing {
+      background: #E0F2FE;
+      color: #0284C7;
+      border: 1px solid #BAE6FD;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2.5px 8px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    @keyframes pulseProcessing {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+
+    .processing-pulse {
+      animation: pulseProcessing 2s infinite ease-in-out;
+    }
+
     .card-meta-row {
       display: flex;
       align-items: center;
@@ -1341,6 +1371,8 @@
     }
 
     // 佇列管理
+    let queuePollingTimer = null;
+
     async function loadQueueItems(showToastFlag) {
       const refreshIcon = document.getElementById('refreshIcon');
       if (refreshIcon) refreshIcon.classList.add('spinner-primary');
@@ -1348,12 +1380,33 @@
       const handleResult = (res) => {
         if (refreshIcon) refreshIcon.classList.remove('spinner-primary');
         if (res && res.success) {
-          currentQueueItems = res.items || [];
-          const processingCount = res.processingCount || 0;
-          document.getElementById('statsPendingCount').textContent = currentQueueItems.length;
+          // 1. 若有正在 AI 辨識中的項目，比照 Android 原生 App 置頂置於佇列最上方
+          const processing = (res.processingItems || []).filter(item => {
+            const s = String(item.status || '').replace(/\s+/g, '');
+            return s.includes('辨識中');
+          });
+          const pending = (res.items || []).filter(item => {
+            const s = String(item.status || '').replace(/\s+/g, '');
+            return s.includes('待刊登') || s.includes('刊登中');
+          });
+          currentQueueItems = [...processing, ...pending];
+
+          const processingCount = res.processingCount !== undefined ? res.processingCount : processing.length;
+          document.getElementById('statsPendingCount').textContent = pending.length;
           document.getElementById('statsProcessingCount').textContent = processingCount;
           document.getElementById('tabQueueBadge').textContent = currentQueueItems.length;
           renderQueueList(currentQueueItems);
+
+          // 若有辨識中的物資，排程 12 秒後靜默自動輪詢
+          if (processing.length > 0) {
+            if (queuePollingTimer) clearTimeout(queuePollingTimer);
+            queuePollingTimer = setTimeout(() => {
+              loadQueueItems(false);
+            }, 12000);
+          } else {
+            if (queuePollingTimer) clearTimeout(queuePollingTimer);
+          }
+
           if (showToastFlag) showToast(`✅ 佇列已更新，共 ${currentQueueItems.length} 筆物資`);
         }
       };
@@ -1401,7 +1454,8 @@
       container.innerHTML = items.map((item) => {
         const row = item.row;
         const status = String(item.status || '').trim();
-        const isLocked = status.includes('刊登中');
+        const isProcessing = status.includes('辨識中');
+        const isLocked = !isProcessing && status.includes('刊登中');
         
         let rawUploader = String(item.uploader || '').trim();
         let displayUploaderName = '';
@@ -1410,8 +1464,8 @@
         }
         const byText = `By：${displayUploaderName}`;
 
-        let categoryText = item.category1_name || '未分類';
-        if (item.category2_name) {
+        let categoryText = isProcessing ? 'AI分析中' : (item.category1_name || '未分類');
+        if (!isProcessing && item.category2_name) {
           categoryText += ` ➔ ${item.category2_name}`;
         }
 
@@ -1432,44 +1486,50 @@
         const priceVal = (item.price !== undefined && item.price !== null && String(item.price).trim() !== '') ? String(item.price).trim() : '0';
         const priceText = `NT$ ${priceVal}`;
         const qtyText = item.quantity ? `${item.quantity} 件` : '1 件';
-        const disabledAttr = isLocked ? 'disabled' : '';
+        const disabledAttr = (isLocked || isProcessing) ? 'disabled' : '';
+
+        // 卡片樣式類別
+        const cardClass = isProcessing ? 'queue-card is-processing' : (isLocked ? 'queue-card is-locked' : 'queue-card');
 
         return `
-          <div class="queue-card ${isLocked ? 'is-locked' : ''}" id="queueCard_${row}">
+          <div class="${cardClass}" id="queueCard_${row}">
             <div class="card-meta-row">
               <div class="meta-left">
-                <span class="badge-category">${escapeHtml(categoryText)}</span>
+                <span class="badge-category" style="${isProcessing ? 'background:#E0F2FE; color:#0284C7;' : ''}">${escapeHtml(categoryText)}</span>
+                ${isProcessing ? '<span class="badge-processing">🤖 AI 辨識中</span>' : ''}
                 ${isLocked ? '<span class="badge-locked">🔒 刊登中</span>' : ''}
               </div>
               <div class="meta-uploader">${escapeHtml(byText)}</div>
             </div>
 
-            <h3 class="card-title">${escapeHtml(item.title || '（AI 辨識品名整理中）')}</h3>
+            <h3 class="card-title ${isProcessing ? 'processing-pulse' : ''}" style="${isProcessing ? 'color:#0369A1;' : ''}">
+              ${escapeHtml(item.title || (isProcessing ? '🤖 AI 正在辨識分析中（約需 10~15 秒）...' : '（AI 辨識品名整理中）'))}
+            </h3>
 
             ${thumbsHtml}
 
             <div class="card-detail-item">
               <span>📍</span>
-              <span>${escapeHtml(item.address || '未指定自取地址')}</span>
+              <span>${escapeHtml(item.address || (isProcessing ? '地址解析中' : '未指定自取地址'))}</span>
             </div>
             <div class="card-detail-item">
               <span>📦</span>
-              <span>${conditionText} ｜ ${priceText} ｜ 數量：${qtyText}</span>
+              <span>${isProcessing ? '雲端特徵識別與自動分類中...' : `${conditionText} ｜ ${priceText} ｜ 數量：${qtyText}`}</span>
             </div>
 
-            ${item.description ? `
-              <div class="card-desc-box">${escapeHtml(item.description)}</div>
-            ` : ''}
+            <div class="card-desc-box" style="${isProcessing ? 'background: rgba(2, 132, 199, 0.06); border-color: #BAE6FD; color: #0369A1;' : ''}">
+              ${escapeHtml(item.description || (isProcessing ? '雲端 AI 正在識別照片特徵、自動分類與品名，完成後將自動就緒。' : ''))}
+            </div>
 
             <div class="card-actions">
               <button type="button" class="btn-card-action btn-reprocess" id="btnReprocess_${row}" 
-                      ${disabledAttr} onclick="reprocessSingleItem(${row}, '${escapeJs(item.title || '')}')">
+                      ${disabledAttr} ${isProcessing ? 'title="AI 辨識分析中，請稍候"' : ''} onclick="reprocessSingleItem(${row}, '${escapeJs(item.title || '')}')">
                 <span id="reprocessIcon_${row}">🔄</span>
                 <span id="reprocessText_${row}">重新辨識</span>
               </button>
 
               <button type="button" class="btn-card-action btn-delete" id="btnDelete_${row}" 
-                      ${disabledAttr} onclick="deleteSingleItem(${row}, '${escapeJs(item.title || '此物資')}')">
+                      ${disabledAttr} ${isProcessing ? 'title="AI 辨識分析中，請稍候"' : ''} onclick="deleteSingleItem(${row}, '${escapeJs(item.title || '此物資')}')">
                 <span>🗑️ 刪除本列</span>
               </button>
             </div>

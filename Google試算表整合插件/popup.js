@@ -33,6 +33,8 @@ const btnSaveGas = document.getElementById('btnSaveGas');
 const processingNoticeBar = document.getElementById('processingNoticeBar');
 const processingCountText = document.getElementById('processingCountText');
 const badgeProcessingPill = document.getElementById('badgeProcessingPill');
+const processingCardNoticeBar = document.getElementById('processingCardNoticeBar');
+const badgeProcessingCard = document.getElementById('badgeProcessingCard');
 const failedNoticeBar = document.getElementById('failedNoticeBar');
 const failedCountText = document.getElementById('failedCountText');
 const btnReprocessAll = document.getElementById('btnReprocessAll');
@@ -733,9 +735,18 @@ async function refreshQueue(options = {}) {
     });
 
     if (resp.success && resp.data && Array.isArray(resp.data.items)) {
-      items = resp.data.items;
+      // 1. 若有正在 AI 辨識中的項目，比照 Android 原生 App 置頂置於佇列最上方
+      const processing = (resp.data.processingItems || []).filter(item => {
+        const s = String(item.status || '').replace(/\s+/g, '');
+        return s.includes('辨識中');
+      });
+      const pending = (resp.data.items || []).filter(item => {
+        const s = String(item.status || '').replace(/\s+/g, '');
+        return s.includes('待刊登') || s.includes('刊登中');
+      });
+      items = [...processing, ...pending];
       const failedCount = resp.data.failedCount || 0;
-      const processingCount = resp.data.processingCount || 0;
+      const processingCount = resp.data.processingCount !== undefined ? resp.data.processingCount : processing.length;
 
       // 寫入本地暫存與更新連線指示
       saveCachedItems();
@@ -848,16 +859,25 @@ function renderCurrentItem() {
   if (items.length === 0 || !items[currentIndex]) return;
   const item = items[currentIndex];
 
+  const isProcessing = String(item.status || '').replace(/\s+/g, '').includes('辨識中');
+  const isLocked = !isProcessing && item.status === '刊登中';
+
   // 1. 佇列位置
   queuePosition.textContent = `待刊物資 (${items.length} 筆) - [${currentIndex + 1}/${items.length}]`;
 
-  // 鎖定狀態指示條
+  // 辨識中與鎖定狀態指示條
+  if (processingCardNoticeBar) {
+    processingCardNoticeBar.style.display = isProcessing ? 'flex' : 'none';
+  }
   if (lockedNoticeBar) {
-    if (item.status === '刊登中') {
-      lockedNoticeBar.style.display = 'flex';
-    } else {
-      lockedNoticeBar.style.display = 'none';
-    }
+    lockedNoticeBar.style.display = isLocked ? 'flex' : 'none';
+  }
+
+  // 卡片外框與背景高亮 (比照 Android 原生 App 天藍色系)
+  if (isProcessing) {
+    queueCard.classList.add('is-processing');
+  } else {
+    queueCard.classList.remove('is-processing');
   }
 
   // 超過 3 張照片的提示
@@ -892,25 +912,80 @@ function renderCurrentItem() {
   }
 
   // 3. 標題與標籤
-  itemTitle.textContent = item.title || '（無品名）';
-  badgeCat.textContent = item.category2_name ? `${item.category1_name || ''} > ${item.category2_name}` : (item.category1_name || '未分類');
-  
-  const isNew = String(item.condition).toLowerCase() === 'new';
-  badgeCond.className = isNew ? 'badge badge-cond-new' : 'badge badge-cond-used';
-  badgeCond.textContent = isNew ? '全新' : '二手';
+  if (isProcessing) {
+    itemTitle.classList.add('processing-pulse');
+    itemTitle.style.color = '#0284C7';
+    itemTitle.textContent = item.title || '🤖 AI 正在辨識分析中（約需 10~15 秒）...';
 
-  badgeQty.textContent = `數量: ${item.quantity || 1}`;
-  badgePrice.textContent = item.price ? `NT$ ${item.price}` : '免費贈送';
+    if (badgeProcessingCard) badgeProcessingCard.style.display = 'inline-flex';
+    badgeCat.textContent = 'AI分析中';
+    badgeCat.style.background = '#E0F2FE';
+    badgeCat.style.color = '#0284C7';
+    badgeCond.style.display = 'none';
+    badgeQty.style.display = 'none';
+    badgePrice.style.display = 'none';
 
-  // 4. 說明
-  itemDesc.textContent = item.description || '（無詳細說明）';
+    itemDesc.textContent = item.description || '雲端 AI 正在識別照片特徵、自動分類與品名，完成後將自動就緒。';
+    itemDesc.style.background = '#F0F9FF';
+    itemDesc.style.color = '#0369A1';
+
+    btnReprocessCurrent.disabled = true;
+    btnReprocessCurrent.style.opacity = '0.5';
+    btnDeleteItem.disabled = true;
+    btnDeleteItem.style.opacity = '0.5';
+    btnSkip.disabled = true;
+    btnSkip.style.opacity = '0.5';
+
+    btnFill.disabled = true;
+    btnFill.style.background = '#94A3B8';
+    btnFill.style.cursor = 'not-allowed';
+    fillBtnIcon.textContent = '⏳';
+    fillBtnText.textContent = 'AI 辨識中，請稍候完成再帶入';
+  } else {
+    itemTitle.classList.remove('processing-pulse');
+    itemTitle.style.color = '';
+    itemTitle.textContent = item.title || '（無品名）';
+
+    if (badgeProcessingCard) badgeProcessingCard.style.display = 'none';
+    badgeCat.textContent = item.category2_name ? `${item.category1_name || ''} > ${item.category2_name}` : (item.category1_name || '未分類');
+    badgeCat.style.background = '';
+    badgeCat.style.color = '';
+
+    const isNew = String(item.condition).toLowerCase() === 'new';
+    badgeCond.className = isNew ? 'badge badge-cond-new' : 'badge badge-cond-used';
+    badgeCond.textContent = isNew ? '全新' : '二手';
+    badgeCond.style.display = '';
+
+    badgeQty.textContent = `數量: ${item.quantity || 1}`;
+    badgeQty.style.display = '';
+    badgePrice.textContent = item.price ? `NT$ ${item.price}` : '免費贈送';
+    badgePrice.style.display = '';
+
+    // 4. 說明
+    itemDesc.textContent = item.description || '（無詳細說明）';
+    itemDesc.style.background = '';
+    itemDesc.style.color = '';
+
+    btnReprocessCurrent.disabled = false;
+    btnReprocessCurrent.style.opacity = '1';
+    btnDeleteItem.disabled = false;
+    btnDeleteItem.style.opacity = '1';
+    btnSkip.disabled = false;
+    btnSkip.style.opacity = '1';
+
+    btnFill.style.background = '';
+    btnFill.style.cursor = '';
+    fillBtnIcon.textContent = '🚀';
+    fillBtnText.textContent = '一鍵帶入此筆物資 (含照片)';
+    btnFill.disabled = !isOnTargetPage || isLocked;
+  }
 
   // 5. 中繼資訊
   const uploaderRaw = (item.uploader || '').trim();
   const isLegacyOrEmpty = !uploaderRaw || uploaderRaw.includes('App/採集') || uploaderRaw.includes('採集端');
   const uploaderDisplay = isLegacyOrEmpty ? '' : uploaderRaw;
   metaUploader.textContent = `By：${uploaderDisplay}`;
-  metaAddress.textContent = `地址: ${item.address || '使用預設地址'}`;
+  metaAddress.textContent = `地址: ${item.address || (isProcessing ? '解析中...' : '使用預設地址')}`;
 
   // 6. 按鈕狀態
   btnPrev.disabled = currentIndex === 0;
@@ -977,6 +1052,11 @@ btnSkip.addEventListener('click', async () => {
   const item = items[currentIndex];
   if (!item || !item.row) return;
 
+  if (String(item.status || '').includes('辨識中')) {
+    showStatus('error', '⚠️ 此物資正在 AI 辨識分析中，無法略過！');
+    return;
+  }
+
   if (!confirm(`確定要略過「${item.title || '此物資'}」嗎？`)) return;
 
   showStatus('info', '正在將該筆標記為略過...');
@@ -1013,6 +1093,11 @@ btnSkip.addEventListener('click', async () => {
 btnFill.addEventListener('click', async () => {
   const item = items[currentIndex];
   if (!item) return;
+
+  if (String(item.status || '').includes('辨識中')) {
+    showStatus('error', '⚠️ 此物資正在 AI 辨識分析中，請稍候完成再進行刊登！');
+    return;
+  }
 
   if (!isOnTargetPage) {
     showStatus('error', '請先前往扶輪公益網刊登頁面！');
