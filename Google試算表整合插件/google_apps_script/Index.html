@@ -579,6 +579,14 @@
       transform: scale(0.96);
     }
 
+    .card-thumb.thumb-failed {
+      background: #F5F5F4;
+      border-color: #D6D3D1;
+      padding: 14px;
+      object-fit: contain;
+      box-sizing: border-box;
+    }
+
     .card-detail-item {
       font-size: 12.5px;
       color: var(--text-muted);
@@ -1372,8 +1380,10 @@
 
     // 佇列管理
     let queuePollingTimer = null;
+    let imageCacheBuster = Date.now();
 
     async function loadQueueItems(showToastFlag) {
+      imageCacheBuster = Date.now();
       const refreshIcon = document.getElementById('refreshIcon');
       if (refreshIcon) refreshIcon.classList.add('spinner-primary');
 
@@ -1469,14 +1479,33 @@
           categoryText += ` ➔ ${item.category2_name}`;
         }
 
+        // 相片縮圖 (最多 3 張，支援快取破除、Google Drive 直連自動降級與點擊重試)
         let thumbsHtml = '';
         if (item.photos && item.photos.length > 0) {
           thumbsHtml = `
             <div class="card-photos">
-              ${item.photos.map(p => `
-                <img class="card-thumb" src="${p.thumbnailUrl || p.originalUrl}" alt="縮圖" 
-                     onclick="openLightbox('${p.originalUrl || p.thumbnailUrl}')" loading="lazy">
-              `).join('')}
+              ${item.photos.map((p, pIdx) => {
+                const fileId = p.fileId || '';
+                const origUrl = p.originalUrl || p.thumbnailUrl || '';
+                const downUrl = p.downloadUrl || (fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : origUrl);
+                const buster = imageCacheBuster || Date.now();
+                const initUrl = p.thumbnailUrl 
+                  ? `${p.thumbnailUrl}${p.thumbnailUrl.includes('?') ? '&' : '?'}_t=${buster}` 
+                  : (origUrl ? `${origUrl}${origUrl.includes('?') ? '&' : '?'}_t=${buster}` : '');
+
+                return `
+                  <img class="card-thumb" 
+                       src="${escapeHtml(initUrl)}" 
+                       alt="縮圖" 
+                       data-file-id="${escapeHtml(fileId)}"
+                       data-orig-url="${escapeHtml(origUrl)}"
+                       data-down-url="${escapeHtml(downUrl)}"
+                       data-fallback-step="0"
+                       onerror="handleThumbError(this)" 
+                       onclick="handleThumbClick(event, this)" 
+                       loading="lazy">
+                `;
+              }).join('')}
             </div>
           `;
         }
@@ -1664,9 +1693,66 @@
       }
     }
 
+    // 處理縮圖載入失敗的多階層降級機制（直連 Google CDN，0 消耗 GAS）
+    function handleThumbError(imgEl) {
+      const step = parseInt(imgEl.getAttribute('data-fallback-step') || '0', 10);
+      const fileId = imgEl.getAttribute('data-file-id');
+      const origUrl = imgEl.getAttribute('data-orig-url');
+      const downUrl = imgEl.getAttribute('data-down-url');
+      const now = Date.now();
+
+      if (step === 0 && fileId) {
+        // 第 1 步降級：嘗試 Google Drive 直連下載網址 (uc?export=download&id=...)
+        imgEl.setAttribute('data-fallback-step', '1');
+        imgEl.src = `https://drive.google.com/uc?export=download&id=${fileId}&_t=${now}`;
+      } else if (step <= 1 && origUrl && origUrl !== imgEl.src) {
+        // 第 2 步降級：嘗試 downloadUrl 或 originalUrl
+        imgEl.setAttribute('data-fallback-step', '2');
+        const target = downUrl || origUrl;
+        const sep = target.includes('?') ? '&' : '?';
+        imgEl.src = `${target}${sep}_t=${now}`;
+      } else {
+        // 第 3 步：皆失敗，顯示可點擊重試的灰色照片圖示
+        imgEl.setAttribute('data-fallback-step', 'failed');
+        imgEl.onerror = null;
+        imgEl.classList.add('thumb-failed');
+        imgEl.title = '相片載入失敗，點擊重新載入';
+        imgEl.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 24 24" fill="%23a8a29e"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/><path d="M12 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>';
+      }
+    }
+
+    // 處理縮圖點擊（正常時開啟燈箱，失敗時點擊強制重試）
+    function handleThumbClick(event, imgEl) {
+      if (imgEl.classList.contains('thumb-failed')) {
+        event.stopPropagation();
+        imgEl.classList.remove('thumb-failed');
+        imgEl.setAttribute('data-fallback-step', '0');
+        imgEl.title = '重新載入中...';
+        const fileId = imgEl.getAttribute('data-file-id');
+        const origUrl = imgEl.getAttribute('data-orig-url');
+        const now = Date.now();
+        imgEl.onerror = function() { handleThumbError(this); };
+        imgEl.src = fileId 
+          ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w800&_t=${now}` 
+          : (origUrl ? `${origUrl}${origUrl.includes('?') ? '&' : '?'}_t=${now}` : '');
+        return;
+      }
+      const origUrl = imgEl.getAttribute('data-orig-url') || imgEl.src;
+      openLightbox(origUrl);
+    }
+
+    // 燈箱大圖控制
     function openLightbox(url) {
       if (!url) return;
-      document.getElementById('lightboxImg').src = url;
+      const lbImg = document.getElementById('lightboxImg');
+      const sep = url.includes('?') ? '&' : '?';
+      lbImg.onerror = function() {
+        const now = Date.now();
+        if (!this.src.includes('_t=')) {
+          this.src = `${url}${sep}_t=${now}`;
+        }
+      };
+      lbImg.src = url.includes('_t=') ? url : `${url}${sep}_t=${Date.now()}`;
       document.getElementById('lightboxModal').classList.add('active');
     }
 

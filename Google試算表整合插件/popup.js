@@ -98,6 +98,7 @@ let isRefreshingQueue = false;
 let lastManualRefreshTime = 0;
 let processingAutoRefreshCount = 0;
 let processingTimer = null;
+let imageCacheBuster = Date.now(); // 圖片快取破除戳記，避免瀏覽器負向快取
 
 // ───────────────────────────────────────────────
 // 初始化流程 (支援本機暫存秒開 SWR)
@@ -722,6 +723,7 @@ async function refreshQueue(options = {}) {
     lastManualRefreshTime = now;
   }
 
+  imageCacheBuster = Date.now(); // 每次點擊刷新時更新時間戳，破除圖片負向快取
   isRefreshingQueue = true;
   if (!isSilent) {
     showStatus('info', '正在從 Google 試算表同步物資...');
@@ -888,20 +890,66 @@ function renderCurrentItem() {
     photoNotice.style.display = 'none';
   }
 
-  // 2. 照片縮圖 (最多展示，前 3 張加上精緻標記)
+  // 2. 照片縮圖 (最多展示，前 3 張加上精緻標記，具備快取破除與多階層自動降級)
   photoBox.innerHTML = '';
   if (item.photos && item.photos.length > 0) {
     item.photos.forEach((p, idx) => {
       const img = document.createElement('img');
       img.className = 'photo-thumb';
-      img.src = p.thumbnailUrl || p.originalUrl;
+      const fileId = p.fileId;
+      const originalUrl = p.originalUrl || p.thumbnailUrl;
+      const downloadUrl = p.downloadUrl || (fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : originalUrl);
+      
+      const buster = imageCacheBuster || Date.now();
+      const initialUrl = p.thumbnailUrl 
+        ? `${p.thumbnailUrl}${p.thumbnailUrl.includes('?') ? '&' : '?'}_t=${buster}` 
+        : (originalUrl ? `${originalUrl}${originalUrl.includes('?') ? '&' : '?'}_t=${buster}` : '');
+
+      img.src = initialUrl;
       img.title = idx < 3 ? `第 ${idx + 1} 張 (將刊登)` : `第 ${idx + 1} 張 (超出上限未選)`;
       if (idx >= 3) {
         img.style.opacity = '0.4';
       }
+
+      let fallbackStep = 0;
       img.onerror = () => {
-        img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="%23ccc"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
+        const now = Date.now();
+        if (fallbackStep === 0 && fileId) {
+          // 降級第 1 階：嘗試 Google Drive 直連下載 (uc?export=download&id=...)
+          fallbackStep = 1;
+          img.src = `https://drive.google.com/uc?export=download&id=${fileId}&_t=${now}`;
+        } else if (fallbackStep <= 1 && originalUrl && img.src !== originalUrl) {
+          // 降級第 2 階：嘗試 originalUrl
+          fallbackStep = 2;
+          const sep = originalUrl.includes('?') ? '&' : '?';
+          img.src = `${originalUrl}${sep}_t=${now}`;
+        } else {
+          // 降級第 3 階：皆失敗，顯示可點擊重試的灰色照片圖示
+          img.onerror = null;
+          img.classList.add('thumb-failed');
+          img.title = `第 ${idx + 1} 張相片載入失敗，點擊重試`;
+          img.style.cursor = 'pointer';
+          img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="%23a8a29e"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/><path d="M12 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>';
+        }
       };
+
+      // 支援點擊放大或點擊失敗重試
+      img.addEventListener('click', (e) => {
+        if (img.classList.contains('thumb-failed')) {
+          e.stopPropagation();
+          img.classList.remove('thumb-failed');
+          img.title = '重新載入中...';
+          fallbackStep = 0;
+          const retryNow = Date.now();
+          img.src = p.thumbnailUrl 
+            ? `${p.thumbnailUrl}${p.thumbnailUrl.includes('?') ? '&' : '?'}_t=${retryNow}`
+            : (originalUrl ? `${originalUrl}${originalUrl.includes('?') ? '&' : '?'}_t=${retryNow}` : '');
+        } else if (originalUrl) {
+          // 在新分頁開啟原始大圖，方便志工檢視
+          window.open(originalUrl, '_blank');
+        }
+      });
+
       photoBox.appendChild(img);
     });
   } else {
