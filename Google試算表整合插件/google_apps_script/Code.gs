@@ -277,6 +277,7 @@ function doGet(e) {
   // 2. 志工直接開啟 Web App 網址，回傳一頁式物資拍照採集網頁 (HtmlService)
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('扶輪公益網 · 物資拍照採集')
+    .setFaviconUrl('https://sardonyx-sudo.github.io/rcn-upload/icons/icon-192.png')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
